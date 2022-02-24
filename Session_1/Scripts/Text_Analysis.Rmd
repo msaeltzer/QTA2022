@@ -16,133 +16,55 @@ knitr::opts_chunk$set(echo = FALSE)
 
 ```
 
-## Overview
 
-- Text as Data
-
-    - Theory
-    - Applications
-
-- Quantitative Text Analysis 101 in Quanteda
-
-    - Corpus, Token, DFM
-    - Text Preprocessing
-    - Counting and Plotting Words
-
-
-## Text as Data in Political Science
-
-- Traditional Text Analysis
-    
-    - Interpretation
-    - Qualitative Hermeneutic
-    - Analysis of Style
-
-- Quantifying Text
-    
-    - Comparative Manifesto Project
-    - Software to Hand-annotate
-    - Aim: Positions of Parties
-    - Expensive, Issues with Reliability
-
-## Natural Language Processing
-
-- How can computers understand humans?
-
-- Rising amount of text classification tasks 
-   
-    - Developments in computer science
-    - Spam filters
-    - Web searches
-    - Social media   
-
-- Methods
-
-    - Supervised 
-    - Semisupervised
-    - Unsupervised
-      
-
-## Political Text
-
-- Communication is a signal
-
-    - Politicians make statements 
-    - Use language strategically
-    - Differ in their language
-
-- Sources
-
-    - Manifestos
-    - Speeches in Parliament
-    - Social Media 
-
-
-## NLP in Political Science 
-
-- Distributional Assumption
-    
-    - Homophilia in Word choices 
-    - Keywords to identify concepts
-    
-- Bag of Words Approach
-    
-    - Structure doesn't matter 
-    - Relative word frequencies
-    - Differences in word counts 
-
-## Applications
-
-
-- Scaling
-    
-    - Wordscores (Laver/Benoit)
-    - Wordfish (Proksch/Slapin)
-    
-- Salience Issues (what matters?)
-    
-    - Supervised Topic Models
-    - LDA Topic Models 
-
-- Dictionaries
-
-
-## Today
-
-- Get text in R
-
-- Preprocessing
-
-- Counting words
-
-- Apply a Topic Dictionary
 
 
 ```{r}
-install.packages('quanteda')
+if(!require(quanteda)){install.packages('quanteda')}
 
+
+library(quanteda)
 
 ```
-
-## Quantitative Text Analysis with Manifestos
-
-Example data: British Election Manifestos
 
 ```{r,echo=F,,message=FALSE,warning=F}
 
-load('uk_manifestos.Rdata')
-
-names(data)
-
+data<-read.csv("../data/reviews.csv")
 ```
 
-We have data from 34 Manifestos of 13 parties from 1983 to 2015! 
 
 ```{r}
 
-table(data$partyname,data$date)
+table(data$sentiment)
 
 ```
+
+## Primitive Dictionary
+
+
+```{r}
+
+
+data$good<-grepl("good",data$text,ignore.case = T)
+
+data$bad<-grepl("bad",data$text,ignore.case = T)
+
+  
+```
+
+
+
+
+```{r}
+
+
+
+table(data$good,data$sentiment)
+table(data$bad,data$sentiment)
+
+```
+
+
 
 ## Quanteda for text analysis
 
@@ -177,7 +99,8 @@ library(quanteda)
 
 corp<-corpus(data$text,docvars 
            
-           =data.frame(party=data$party,partyname=data$partyname,date=data$date))
+           =data)
+
 ```
 
 Now the metadata is stored in docvars and the texts stored in texts. You can look at it by calling
