@@ -1,0 +1,326 @@
+---
+title: "Quantitative Text Analysis in R"
+author: "Marius Saeltzer"
+date: "11-09-2020"
+output:
+    ioslides_presentation:
+    incremental: false
+    widescreen: false 
+    smaller: false 
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+## Overview
+
+- Text as Data
+
+    - Theory
+    - Applications
+
+- Quantitative Text Analysis 101 in Quanteda
+
+    - Corpus, Token, DFM
+    - Text Preprocessing
+    - Counting and Plotting Words
+
+
+## Text as Data in Political Science
+
+- Traditional Text Analysis
+    
+    - Interpretation
+    - Qualitative Hermeneutic
+    - Analysis of Style
+
+- Quantifying Text
+    
+    - Comparative Manifesto Project
+    - Software to Hand-annotate
+    - Aim: Positions of Parties
+    - Expensive, Issues with Reliability
+
+## Natural Language Processing
+
+- How can computers understand humans?
+
+- Rising amount of text classification tasks 
+   
+    - Developments in computer science
+    - Spam filters
+    - Web searches
+    - Social media   
+
+- Methods
+
+    - Supervised 
+    - Semisupervised
+    - Unsupervised
+      
+
+## Political Text
+
+- Communication is a signal
+
+    - Politicians make statements 
+    - Use language strategically
+    - Differ in their language
+
+- Sources
+
+    - Manifestos
+    - Speeches in Parliament
+    - Social Media 
+
+
+## NLP in Political Science 
+
+- Distributional Assumption
+    
+    - Homophilia in Word choices 
+    - Keywords to identify concepts
+    
+- Bag of Words Approach
+    
+    - Structure doesn't matter 
+    - Relative word frequencies
+    - Differences in word counts 
+
+## Applications
+
+
+- Scaling
+    
+    - Wordscores (Laver/Benoit)
+    - Wordfish (Proksch/Slapin)
+    
+- Salience Issues (what matters?)
+    
+    - Supervised Topic Models
+    - LDA Topic Models 
+
+- Dictionaries
+
+
+## Today
+
+- Get text in R
+
+- Preprocessing
+
+- Counting words
+
+- Apply a Topic Dictionary
+
+
+```{r}
+install.packages('quanteda')
+
+
+```
+
+## Quantitative Text Analysis with Manifestos
+
+Example data: British Election Manifestos
+
+```{r,echo=F,,message=FALSE,warning=F}
+
+load('uk_manifestos.Rdata')
+
+names(data)
+
+```
+
+We have data from 34 Manifestos of 13 parties from 1983 to 2015! 
+
+```{r}
+
+table(data$partyname,data$date)
+
+```
+
+## Quanteda for text analysis
+
+- Quantitative Text Analysis 101 in Quanteda
+
+    - Corpus, Token, DFM
+    - Text Preprocessing
+    - Counting and Plotting Words
+
+Ken Benoit produced a very useful package called quanteda, which makes text as data available in a fast, easy and powerful way. Before we start, a little terminology I will tell you more about later:
+
+    - Corpus: A text "data set" which stores the raw text in the correct order as long strings - A string of words
+    
+    - Tokens: A List of words for each text, vectorized and therefore computable - A vector of words
+    
+    - DFM: A dataset that tells me for each word in which documents it occurs how often and for each document which words occur on in how often - a bag of words
+
+
+## To Corpus
+
+First we prepare the text and put it into a corpus:
+
+Corpora are data objects to store large amounts of texts. R was not originally developed to store anything but numbers, a feature you will notice when you open large text stored in data.frame cells. It is very slow and highly inefficient. Regular expressions are among the slowest functions in R. 
+Packages like snowball, tm, text2vec and most recent quanteda offer a corpus class that allows efficient word based operations. They are somewhat counterintuitive and resemble lists in the sense that they store meta data. Quanteda has the nice feature of docvars, putting text in a data.frame form, allowing a more data-like interpretation of corpora than tm.
+
+
+A corpus is made up of texts and docvars. Docvars are document level variables like a data.frame
+
+```{r,,message=FALSE,warning=F}
+
+library(quanteda)
+
+corp<-corpus(data$text,docvars 
+           
+           =data.frame(party=data$party,partyname=data$partyname,date=data$date))
+```
+
+Now the metadata is stored in docvars and the texts stored in texts. You can look at it by calling
+
+```{r}
+
+#texts(corp)[1]
+nchar(texts(corp)[1])
+```
+
+You can again extract the data frame 
+
+```{r}
+
+df<-docvars(corp)
+
+```
+
+or can call individual document variables using this: 
+
+```{r}
+
+party<-docvars(corp,"party")
+
+```
+
+## Tokenize
+
+As you can see looking at the texts() result, this is a lot of stuff. To get a hold on it, we will now make it more "computable" for the computer. To do this, we use so called tokenizers. 
+
+A tokenizer basically splits up a text into elements using language rules. These elements can be 
+
+  - Paragraphs
+  - Sentences
+  - Words
+  - ngrams (tupels of words that follow another)
+  - letters
+  
+What you want, depends on what is you approach to data. The simpelest approach is bag of words, in which you just count how often a word occurs in a document. This is what we will do here and what is done most of the time, so it is the default option. However, if you use more sophisticated methods like word embeddings, tokenization in ngrams is often preferred. 1
+
+In this simple introduction, we use a simple bag of words approach. The bag of words assumption is that the sequence in which words occur does not actually matter to the meaning of the text. This is more often fullfilled than one might assume. 
+
+
+```{r}
+
+ft<-tokens(corp,remove_punct=T,remove_numbers = T)
+
+ft[1]
+
+```
+
+As you can see, the computer has done three things: 
+  1. it split the text into individual words
+  2. it removed punctuation, which is now useless
+  3. it removed numbers
+
+But of course, when we relax the assumption of sequential meaning, certain words don't make sense anymore. These words are stopwords.
+
+
+## Remove Stopwords
+
+Stopwords are words that are common and non-informative for the bag-of-words approach since they mostly connect informative words to one another. And, if, then etc. don't really matter anymore, so we remove them.
+
+Let's look at stopwords that are implemented in quanteda!
+
+
+```{r}
+stopwords("en")
+
+```
+
+We remove them by first lowercasing and then using the tokens_select method.
+
+
+```{r}
+ft<-tokens_tolower(ft)
+
+ft<-tokens_select(ft,pattern=stopwords("en"),selection='remove')
+
+ft[1]
+```
+
+What we now have is a list of words.
+
+But to analyze words, quantitatively, we need to bring them into a form that allows statistical analysis. For example, how can we do descriptive statistics on how often words occur? How can we find out which words differentiate documents? How can we find out which documents are similar?
+
+As you know, statistics is designed for matrices. No statistic can be done without matrices of data. But what is a matrix of words? 
+
+A matrix of words is called a document-feature matrix. Like a dataframe, it contains rows of observations (documents) and columns of features (words), like variables. You can understand the occurence of a word in a document as a variable of the documents. 
+
+
+## Dictionary Analysis
+
+Now that you know how to count words, we can relate this back to our course in a very minimal way. We will learn over the next 4 weeks how to use word frequencies to estimate the topics of text - we will use supervised machine learning and unsupervised topic models. But before we start, let
+s use the simplest method there is. The dictionary approach. Dictionaries are pretty much what they sound like. They "translate" words into categories. 
+
+Human experts develop them to look up texts for keywords. One of the first contributions to this in political science is the work of Laver/Garry 2000. They developed 9 top level categories and diverse subcategories for the english manifestos you have been looking at today. I show you today the environemt category deployed in this dictionary. But first, we must build it.
+
+
+```{r}
+mig<-tolower(c("migra*","immig*","asyl*","border","refu*","RACI*"))
+
+``` 
+
+In quanteda, dictionaries are defined as lists and each category is a sublist.
+
+```{r}
+env_dict<-dictionary(list(environment=envi))
+
+```
+
+After we do this, we transform our dfm in only counting terms which are mentioned in the coding category, and other words.
+
+```{r}
+
+
+btw_env <- dfm(dfc, dictionary = env_dict) 
+env <- as.numeric(btw_env[,"environment"]) # only positive mentions of the words in category environment
+docvars(dfc,"env")<-env/ntoken(dfc) # compute the share
+```
+
+
+
+
+
+And now, we can plot the relative mentioning of all parties about this topic. 
+
+```{r}
+
+
+plot(docvars(dfc,"env")~as.factor(docvars(dfc,"partyname")), las=2,xlab=NULL,ylab=NULL,cex.axis=0.5)
+
+```
+
+```{r}
+
+btw_env <- dfm(dfc, dictionary) 
+
+
+
+env <- as.numeric(btw_env[,"environment"]) # only positive mentions of the words in category environment
+docvars(dfc,"env")<-env/ntoken(dfc) # compute the share
+
+
+```
+
