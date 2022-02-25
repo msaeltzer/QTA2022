@@ -1,7 +1,7 @@
 ---
-title: "Quantitative Text Analysis in R"
+title: "Computational Text Analysis in R - A Primitive Introduction"
 author: "Marius Saeltzer"
-date: "11-09-2020"
+date: "2022-02-25"
 output:
     ioslides_presentation:
     incremental: false
@@ -12,35 +12,53 @@ output:
 
 
 ```{r setup, include=FALSE}
+
+#install.packages("knitr")
 knitr::opts_chunk$set(echo = FALSE)
 
 ```
 
-
-
+For this, we need 4 packages, including devtools, to download one from github.
 
 ```{r}
-if(!require(quanteda)){install.packages('quanteda')}
+if(!require(udpipe)){install.packages('udpipe')}
+if(!require(devtools)){install.packages("devtools")}
+if(!require(quanteda)){install.packages("quanteda")}
+devtools::install_github("kbenoit/quanteda.dictionaries") 
 
 
+library(udpipe)
+library(quanteda.dictionaries)
 library(quanteda)
-
 ```
 
-```{r,echo=F,,message=FALSE,warning=F}
+# The classicfier
+
+As we start this course, we have not yet decided on what kind of data we want to work with. This depends on your research interests. For the first session, we will work with one of the most iconic datasets there is, the IMDB movie reviews dataset. It has 2 nice properties. It is labeled by the users (they give points for a movie) and it is used for the validation of all sorts of sentiment classifiers. 
+
+The underlying concept is "sentiment" in the sense how much someone likes a particular movie. I got a sample of 5000 reviews here, if you want more, you find it not only in the textstat package, but in numerous other packages. A similar dataset is also in the package quanteda.corpora.
+
+So let's start and check the data.
+
+```{r}
 
 data<-read.csv("../data/reviews.csv")
 ```
 
+As we can see, we have a pretty balanced dataset 
 
 ```{r}
 
-table(data$sentiment)
+barplot(table(data$sentiment))
+
+## how long is the text
+hist(nchar(data$text))
 
 ```
 
 ## Primitive Dictionary
 
+First, we want to see how base R functions for text analysis work. We use regular expressions here to simply match terms in the text. In this case, we just match the terms good and bad, and substract them. Primitive, stupid, but it will make a point.
 
 ```{r}
 
@@ -49,30 +67,25 @@ data$good<-grepl("good",data$text,ignore.case = T)
 
 data$bad<-grepl("bad",data$text,ignore.case = T)
 
+data$sent<-data$good-data$bad
   
 ```
 
 
-
+First, we can see the main weakness of a dictionary. In most cases, the relevant terms don't actually occur, or cancel each other out. For half the dataset, we can't say anything, even though we know the posts are negative or positive. Ignoring them, we see slight tendencies in the right direction, but we can't see the correct answer. This is the 1) problem of natural language dictionaries: we use many terms for the same concept ("bad"). But it shows that a lot of reviews that are negative contain the word good, but not bad. This is the 2) problem of dictionaries: the use of the term in context ("Good Lord","Good Riddance"), use negations ("not good") or sarcasm. 
 
 ```{r}
-
-
-
-table(data$good,data$sentiment)
-table(data$bad,data$sentiment)
+table(data$sent,data$sentiment)
 
 ```
 
 
 
-## Quanteda for text analysis
 
-- Quantitative Text Analysis 101 in Quanteda
 
-    - Corpus, Token, DFM
-    - Text Preprocessing
-    - Counting and Plotting Words
+
+
+## quanteda
 
 Ken Benoit produced a very useful package called quanteda, which makes text as data available in a fast, easy and powerful way. Before we start, a little terminology I will tell you more about later:
 
@@ -103,147 +116,204 @@ corp<-corpus(data$text,docvars
 
 ```
 
-Now the metadata is stored in docvars and the texts stored in texts. You can look at it by calling
+## Dictionary Analysis 
+
+
+There are several dictionaries out there to perform sentiment analysis. One of the most popular in the social sciences, because it was developed for newspaper articles instead of movie reviews, is the lexicoder dictionary by Soroka et al.
+
+
+To do dictionary analysis, we can use the Lexicoder dictionary implemented in quanteda.
 
 ```{r}
 
-#texts(corp)[1]
-nchar(texts(corp)[1])
+lsd<-quanteda::data_dictionary_LSD2015
+lsd
 ```
 
-You can again extract the data frame 
+The quanteda.dictionary package we downloaded from github contains a nice way to directly apply it to texts.
 
-```{r}
 
-df<-docvars(corp)
 
+```{r} 
+
+output_lsd <- liwcalike(corp, 
+                       dictionary = lsd)
 ```
 
-or can call individual document variables using this: 
+To classify the reviews, we will now score the individual reviews, based on the number of positive and negative features they have.
 
 ```{r}
 
-party<-docvars(corp,"party")
+data$score<-(output_lsd$positive+output_lsd$neg_negative)>(output_lsd$negative+output_lsd$neg_positive)
+                              
+t1<-table(data$score,data$sentiment)
+sum(diag(t1)/sum(t1))
 
 ```
-
-## Tokenize
-
-As you can see looking at the texts() result, this is a lot of stuff. To get a hold on it, we will now make it more "computable" for the computer. To do this, we use so called tokenizers. 
-
-A tokenizer basically splits up a text into elements using language rules. These elements can be 
-
-  - Paragraphs
-  - Sentences
-  - Words
-  - ngrams (tupels of words that follow another)
-  - letters
-  
-What you want, depends on what is you approach to data. The simpelest approach is bag of words, in which you just count how often a word occurs in a document. This is what we will do here and what is done most of the time, so it is the default option. However, if you use more sophisticated methods like word embeddings, tokenization in ngrams is often preferred. 1
-
-In this simple introduction, we use a simple bag of words approach. The bag of words assumption is that the sequence in which words occur does not actually matter to the meaning of the text. This is more often fullfilled than one might assume. 
+As we can see, the accuracy of this dictionary is not even that bad, it is substantially better than just guessing (an accuracy of 50% if we have so balanced classes).
 
 
-```{r}
-
-ft<-tokens(corp,remove_punct=T,remove_numbers = T)
-
-ft[1]
-
-```
-
-As you can see, the computer has done three things: 
-  1. it split the text into individual words
-  2. it removed punctuation, which is now useless
-  3. it removed numbers
-
-But of course, when we relax the assumption of sequential meaning, certain words don't make sense anymore. These words are stopwords.
+But how can we do this in more detail? Dictionaries are the most simple form of rule-based classification. How can we plug them into more sophisticated methods? First, we want to focus on more rule-based approaches, namely grammar-based ways of preprocessing.
 
 
-## Remove Stopwords
+## Computer linguistic
 
-Stopwords are words that are common and non-informative for the bag-of-words approach since they mostly connect informative words to one another. And, if, then etc. don't really matter anymore, so we remove them.
+First, we will take a look at what natural language processing can do: understanding the complexity of language.
 
-Let's look at stopwords that are implemented in quanteda!
+
+To do this, we apply grammatical rules to the texts. We split them in sentences and words, find out the grammatical position and function, and offer the correct root forms. Basically, we do high school grammar, but automated, to be more concrete in what we look at. 
+
+This can be very important, as many terms have different meaning depending on their position in a sentence.  
+
+This is a very standardized task in linguitics, and due to the logic of the language and machine learning, we have well-working language models, as implemented in libraries like spacy in python, or udpipe in R. 
+
+We download one of these language models:
 
 
 ```{r}
-stopwords("en")
 
-```
-
-We remove them by first lowercasing and then using the tokens_select method.
-
-
-```{r}
-ft<-tokens_tolower(ft)
-
-ft<-tokens_select(ft,pattern=stopwords("en"),selection='remove')
-
-ft[1]
-```
-
-What we now have is a list of words.
-
-But to analyze words, quantitatively, we need to bring them into a form that allows statistical analysis. For example, how can we do descriptive statistics on how often words occur? How can we find out which words differentiate documents? How can we find out which documents are similar?
-
-As you know, statistics is designed for matrices. No statistic can be done without matrices of data. But what is a matrix of words? 
-
-A matrix of words is called a document-feature matrix. Like a dataframe, it contains rows of observations (documents) and columns of features (words), like variables. You can understand the occurence of a word in a document as a variable of the documents. 
-
-
-## Dictionary Analysis
-
-Now that you know how to count words, we can relate this back to our course in a very minimal way. We will learn over the next 4 weeks how to use word frequencies to estimate the topics of text - we will use supervised machine learning and unsupervised topic models. But before we start, let
-s use the simplest method there is. The dictionary approach. Dictionaries are pretty much what they sound like. They "translate" words into categories. 
-
-Human experts develop them to look up texts for keywords. One of the first contributions to this in political science is the work of Laver/Garry 2000. They developed 9 top level categories and diverse subcategories for the english manifestos you have been looking at today. I show you today the environemt category deployed in this dictionary. But first, we must build it.
-
-
-```{r}
-mig<-tolower(c("migra*","immig*","asyl*","border","refu*","RACI*"))
+udpipe::udpipe_download_model("english")
 
 ``` 
-
-In quanteda, dictionaries are defined as lists and each category is a sublist.
+...and import it.
 
 ```{r}
-env_dict<-dictionary(list(environment=envi))
+library(udpipe)
+mod<-list.files()[grepl("udpipe",list.files())]
+m1<-udpipe_load_model(mod)
 
 ```
 
-After we do this, we transform our dfm in only counting terms which are mentioned in the coding category, and other words.
 
+Let's annotate n reviews, depending how much time you have ;)
 ```{r}
-
-
-btw_env <- dfm(dfc, dictionary = env_dict) 
-env <- as.numeric(btw_env[,"environment"]) # only positive mentions of the words in category environment
-docvars(dfc,"env")<-env/ntoken(dfc) # compute the share
-```
-
-
-
-
-
-And now, we can plot the relative mentioning of all parties about this topic. 
-
-```{r}
-
-
-plot(docvars(dfc,"env")~as.factor(docvars(dfc,"partyname")), las=2,xlab=NULL,ylab=NULL,cex.axis=0.5)
+n<-50
 
 ```
 
+using this function, we annotate the corpus
+```{r}
+annotations<-udpipe::udpipe_annotate(object = m1,data$text[1:n])
+```
+
+
+As you can see, it takes a while to only annotate only a small number of posts...
+
+We then turn it into a data.frame to take a closer look.
+```{r}
+annotations_df<-as.data.frame(annotations)
+```
+
+We can now see how only 50 reviews get split in over 13766 words, which are annotated with their lemma, position in the sentence.
+
+
+Let's look at some proper nouns:
+
 ```{r}
 
-btw_env <- dfm(dfc, dictionary) 
+pn<-annotations_df[annotations_df$upos=="PROPN",]
 
-
-
-env <- as.numeric(btw_env[,"environment"]) # only positive mentions of the words in category environment
-docvars(dfc,"env")<-env/ntoken(dfc) # compute the share
-
+head(pn$token,40)
 
 ```
+
+
+So why should be do this? We can improve the performance of tasks further down the line, for example find out who is targeted by sentiment, or focus on specific types of words like adjectives. 
+
+Let's apply the dictionary to adjectives only, for example. 
+
+To do this, we need but get a bit creative and/or hackish. Because udpipe and quanteda are not easily compatible, we build our own method. 
+
+Normally, you would just use the %in% operator to check for each term that occurs in the dictionary. But sadly, the Lexicoder is a number of regex expressions. So what to do? We will have to loop the regex over every token
+
+For each token, we want to check if the terms in the Lexicoder match it.
+
+
+```{r}
+grepl(lsd$positive,r1$lemma)
+
+```
+doesn't work, because it will only check the first entry. So lets write a function that passes them all. It is incredibly inefficient, but does the job ;)
+
+```{r}
+
+check_dictionary<-function(text,dict){
+  y<-F
+  for(i in 1:length(dict)){
+  y<-grepl(dict[i],text)
+  if(y==T){break}
+  }
+  return(y)
+}  
+```
+
+
+It also turned out that the dictionary used in quanteda has a typo...
+
+To remove, do:
+```{r}
+lsd$negative<-gsub("\\*\\*","\\*",lsd$negative)
+```
+
+```{r}
+
+### there is an error in the dictionary 
+
+check_dictionary("horrendous",lsd$positive)
+check_dictionary("horrendous",lsd$negative)
+```
+
+Now that we built our own dictionary function, we can apply it to the token level. Therefore, we can use the annotation function, to only check adjectives.
+
+
+```{r}
+r3<-annotations_df[annotations_df$upos=="ADJ",]
+
+```
+
+Next, we apply the function to the adjectives only...
+
+
+```{r}
+pos<-lapply(r3$token,function(x) check_dictionary(x,lsd$positive))
+
+
+neg<-lapply(r3$token,function(x) check_dictionary(x,lsd$negative))
+
+r3$pos<-unlist(pos)
+r3$neg<-unlist(neg)
+
+```
+
+and 
+
+```{r}
+s_p<-aggregate(pos~r3$doc_id,data=r3,FUN="mean")
+s_n<-aggregate(neg~r3$doc_id,data=r3,FUN="mean")
+s<-cbind(s_p,s_n)
+s$id<-as.numeric(gsub("doc","",s$`r3$doc_id`))
+s<-s[order(s$id),]
+s$senti<-data$sentiment[1:n]
+s$lexi<-data$score[1:n]
+s$lexi<-ifelse(s$lexi==T,"pos","neg")
+s$lexi_adj<-ifelse(s$pos>s$neg,"pos","neg")
+
+```
+```{r}
+t1<-table(s$lexi,s$senti)
+
+t2<-table(s$lexi_adj,s$senti)
+
+sum(diag(t1)/sum(t1))
+sum(diag(t2)/sum(t2))
+
+```
+
+All in all, tiny bit better when only looking at adjectives, but this is a great lesson about accuracy metrics we will have later in this course...
+
+Let's return to the slides for a second.
+
+
+
+
 
