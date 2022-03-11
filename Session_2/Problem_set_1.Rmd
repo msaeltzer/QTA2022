@@ -1,0 +1,82 @@
+---
+title: "Problem_Set_1"
+author: "Marius Saeltzer"
+date: "9 3 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#
+
+By now, you should have a broad idea of what you can do text analysis, while the analyical methods are still vague. Today, we talked about text representation. In the first session, we talked about analytical constructs and finding a bridge between data and concepts. 
+
+This problem set will guide you to prepare your data for downstream tasks of interest. To do this I want you to do two levels of analysis, first conceptual, and then technical. 
+
+## Conceptual
+
+As social scientists, we try to find answers to often very abstract questions. To do this, we need to properly conceptualize what you want to measure. We need to find an analytical construct to do so. 
+
+a) Think of an example hypothesis for your potential paper. Which variable will be measured via text?
+
+b) What semantic markers (terms/expressions) relate to this concept?
+
+c) What are related concepts that might bias your measurement if you missed the exact specification?
+
+
+d) What semantic field, frame and/or affect will relate to this concept?
+
+
+
+## Technical 
+ 
+ 
+# Bag of Words 
+Write the code to produce a document feature matrix out of your corpus.
+
+```{r}
+```
+
+
+Give me some discriptions of the data. How many documents, unique features and total features do you have?
+```{r}
+```
+
+
+Visualize your dfm in a way that speaks to your interest.
+
+```{r}
+```
+Which features are overrepresented and hide what you are interested in? Apply some techniques of feature enginering to clean it up.
+Clean:
+```{r}
+```
+
+
+Build a simple dictionary that relates to a small share of your concept - What are typical words/ngrams/expressions you would be interested in? Extract some texts that seem to contain the concept!
+
+```{r}
+```
+
+
+
+# String of words
+
+Give me a short intuition where problems could lie in identifying your concept in textual data. How would additional context help your concept specification? 
+
+
+Try to extend your dictionary from the previous taks using word embeddings. 
+
+
+```{r}
+```
+
+What are the top words in your corpus that were not in your dictionary that relate to the concept?
+
+```{r}
+```
+
+
+

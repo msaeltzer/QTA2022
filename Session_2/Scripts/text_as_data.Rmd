@@ -1,0 +1,717 @@
+---
+title: "Quantitative Text Analysis in R"
+author: "Marius Saeltzer"
+date: "11-09-2020"
+output:
+    ioslides_presentation:
+    incremental: false
+    widescreen: false 
+    smaller: false 
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+## Last Week
+
+
+
+
+
+```{r,,message=FALSE,warning=F}
+
+if(!require(quanteda)){install.packages("quanteda")}
+if(!require(text2vec)){install.packages("text2vec")}
+
+
+```
+
+
+# The Meaning of Life
+
+
+
+
+## Bag-of-words approach
+
+Tokens
+index in a vocabulary list
+  ngrams
+  
+  stemming
+  
+  lemmatization
+  
+  
+
+DFM
+
+  A faster dictionary
+
+  Visualizations
+  
+  feature engineering
+  
+  Trimming DFM's
+  
+  Weighting DFM'S
+  
+  stopwords
+
+## Beyond the Bag of words 
+
+
+"We know a word by the company it keeps"
+
+Context 
+
+polysemous
+Synonymy
+
+A better matrix 
+
+TFM
+
+Word to Vec
+
+GLOVE
+
+Cosine Similarity
+
+
+Adding to your Dictionary 
+
+
+
+
+
+### Data
+
+
+As of last weeks discussion, I got 5x manifesto's, 3 x newspaper, and 3 different sorts of technical papers. We will therefore start with Manifestos in the course. They have a number of advantages: they are available in english, but travel to other languages. Accordingly, they can be tried out in different languages as well as multi language contexts. Second, they are precoded according to specific schemes, which will come handy in the classification / supervised ML session. Third, they are good training material to classify other sources like newspaper articles, speeches, social media posts etc for topic. 
+
+
+I provided you here with a CAP-coded corpus of all british manifestos
+
+
+```{r}
+load(url("https://github.com/msaeltzer/topic_course/raw/master/Session_8/CAP_UK.rdata"))
+
+```
+
+We import the corpus from a github repo and find a coded dataset. For today, ignore the codings, we fill focus on the representation of text.
+
+You can again extract the data frame 
+
+```{r}
+
+df<-docvars(uk_corp)
+
+```
+
+or can call individual document variables using this: 
+
+```{r}
+
+party<-docvars(uk_corp,"party")
+
+```
+
+## Tokenize
+
+As you can see looking at the texts() result, this is a lot of stuff. To get a hold on it, we will now make it more "computable" for the computer. To do this, we use so called tokenizers. 
+
+A tokenizer basically splits up a text into elements using language rules. These elements can be 
+
+  - Paragraphs
+  - Sentences
+  - Words
+  - ngrams (tupels of words that follow another)
+  - letters
+  
+What you want, depends on what is you approach to data. The simpelest approach is bag of words, in which you just count how often a word occurs in a document. This is what we will do here and what is done most of the time, so it is the default option. However, if you use more sophisticated methods like word embeddings, tokenization in ngrams is often preferred. 1
+
+In this simple introduction, we use a simple bag of words approach. The bag of words assumption is that the sequence in which words occur does not actually matter to the meaning of the text. This is more often fullfilled than one might assume. 
+
+
+```{r}
+
+ft<-tokens(uk_corp)
+
+ft[1]
+
+```
+
+As you can see, the computer has done three things: 
+  1. it split the text into individual words
+  2. it removed punctuation, which is now useless
+  3. it removed numbers
+
+In this step, we do something that is called indexing in the background. As I mentioned before, regular expressions are very slow, as they need to glide over text at match all the time. This is not the issue anymore once we tokenized the text. In the background, every word has gotten a numeric ID, usually a running tally that allows the computer to mask a word with a number. Computers are way better with numbers than they are with strings of characters. So basically, the computer assigns a number to each unique token in a dataset, this is called our VOCABULARY. 
+
+
+
+
+## Document-Feature Matrices
+
+
+But to analyze text with statistical tools, we need to bring them into a form that allows statistical analysis. This form is a rectangle with observations and variables (a matrix), or how they are called in machine learning, cases and features. In the bag-of-words approach, we map occurrence to vocabulary using a document-feature-matrix. 
+
+Like a dataframe, it contains rows of observations (documents) and columns of features (words), like variables. You can understand the occurence of a word in a document as a variable of the documents. 
+
+
+```{r}
+dfc<-dfm(ft)
+dfc
+```
+
+
+As you can see, each document is represented to a numeric line, telling you for each feature (word), how often it occurs in the respective document. As you can imagine, most of these occurences are 0, since most terms are rare, while a few terms are common (Zipf's Law). This makes a matrix SPARSE, meaning mostly consisting of 0'es. While a document is characterized my the terms it contains, a word is characterized by the documents it occurs in. 
+
+Let's first take a look at our dfm. To inspect what is inside your dfm, we can simply plot its top features. 
+
+
+```{r}
+
+scores<-topfeatures(dfc,40)
+scores<-scores[order(scores,decreasing =F)]
+barplot(scores,
+        horiz=TRUE,las=1,cex.axis =.2)
+
+
+```
+
+You can see that common words like "the" are most prominent here. This of course makes sense, but reduces interpretability. For text analysis, we need to find out which quantities relate to the concepts we want to measure. So the question is less about the sheer number of terms, but the number of relevant terms. In other words, we want to extract the semantic markers that relate to quantities of interest. 
+
+## Preprocessing and Feature Engineering
+
+Simple models of text as the class of bag-of-words models have to rely on document feature matrices to make sense of the data. We will later talk about more sophisticated approaches, but on the bag-of-words level, there is not so much we can do computationally. Since we loose the context in which a word is used beyond the document it occurs in, we loose a lot of granularity in the data. But we can recover this by changing what the dfm consists of. 
+
+Preprocessing and Feature Engineering happen on all levels of NLP/Text Analysis, however they are especially important in BOW approaches, as more sophisticated models include their own pipelines. However, they can have tremendous effects on results. The question of whether to remove URLs, Numbers, stemming or applying other processing steps are of great importance and can change the results fundamentally. The line between "neutral" changes and introduction/removing biases is thin. The definitions of PREPROCESSING and FEATURE ENGINEERING are very fluid. I can't tell you precisely what the difference in every understanding is, but I will define it like this: if it is about removing useless information that uses up processing power, I will call it preprocessing. If it has a theoretcal core making assumption of the structure of the text and how it relates to your concept, it is feature engineering. 
+
+
+### Preprocessing
+
+As an example, quanteda offers a number of "standard" procedures. Actually, if you dfm your tokens object, it lower all caps by default, you have to tell it otherwise. While these are quite straightforward, they can cause a lot of problems. If you are interested in media consumption, links might be of interest. If you are looking for proper nouns, or in German, nouns in general, you might want to keep capitalization the way it is. In a way these steps already make use of feature engineering. 
+
+```{r}
+
+ft<-tokens(uk_corp,remove_punct=T,
+           remove_numbers = T,
+           remove_url = T, 
+           split_hyphens = T,
+           remove_symbols = T)
+
+
+```
+
+
+
+## ngrams
+
+A second, more invasive way to change your dfm is going away from individual tokens, to ngrams. n-grams (in the sense of 1-gram, 2-gram, 3-gram) are sequences of words that get tokenized together. So conservative_party, conservative and party get 3 distinct indexes. This of course lets the complexity of da dataset explode. The number of features grows exponetially with n. Let's try it out. 
+
+
+
+
+```{r}
+
+dfm_ng<-dfm(tokens_ngrams(tokens(uk_corp)))
+```
+We produce bigrams here. 
+
+```{r}
+
+dfm_ng
+```
+
+So why would we do this? Above we talked about the problem that words mean different things in different contexts. Party might mean something completely different in a song text than it does in an election manifesto. So here we can keep them together based on their meaning to some degree. A second, theory driven reasoning would be that certain expression carry a concept, while others don't. "will of the people" means something else than "will","of","the" and "people". 
+
+Looking at the distribution, we can see that common expression again dominate here. Of course, in manifestos, "we_will" is the top feature. 
+```{r}
+
+scores<-topfeatures(dfm_ng,40)
+scores<-scores[order(scores,decreasing =F)]
+barplot(scores,
+        horiz=TRUE,las=1,cex.axis =.2)
+
+```
+
+
+
+
+
+## Stemming 
+
+Basically the opposite of ngrams is stemming. Instead of making features more specific, stemming makes them more general. The idea is that in many language, we have small changes in words, like flections, plural forms or verb forms. But this does not change the meaning of the word. Workers and worker mean the same, but would get different indexes in a dfm. 
+
+A stemmer helps by cutting off the end of a word by cutting it to its "stem". 
+
+```{r}
+dfc_s<-dfm(tokens_wordstem(ft))
+dfc
+```
+
+This of course helps to fight feature heterogeneity, while at the same time reducing computational requirements (less terms to compute), at the price of possible errors in merging terms together. Partisan and party might become one, but mean different things. This can be avoided at the cost of more ressources.
+
+The more sophisticated version of stemming is lemmatization. As we did in session 1, we can annotate corpora and check how the terms are used, to then merge the same terms together. Verbs are not cut off, but aggregated to their infinitive forms. However, this is computationally intensive, removing one reason why stemming is applied in the first place. Whether or not you want to use it depends on your data, and you should check your results if the stemming has weird effects you did not anticipate. 
+
+
+
+## Feature Destruction 
+
+
+Another Brute Force way to deal with data heterogeneity is to simply remove features. This can happen by occurence, or by pre-defined lists, such as "stopwords". Stopwords are terms that don't really matter for a bag-of-words model. They are so common that they contain little signal, so removing them might reduce requirement of computational ressources. Quanteda comes with a stopword list for most languages (but beware of the German one).
+
+
+
+
+
+Stopwords are words that are common and non-informative for the bag-of-words approach since they mostly connect informative words to one another. And, if, then etc. don't really matter anymore, so we remove them.
+
+Let's look at stopwords that are implemented in quanteda!
+
+
+```{r}
+stopwords("en")
+
+```
+
+We remove them by first lowercasing and then using the tokens_select method.
+
+
+```{r}
+ft<-tokens_tolower(ft)
+
+ft<-tokens_select(ft,pattern=stopwords("en"),selection='remove')
+
+
+dfc<-dfm(ft)
+```
+
+
+## trimming dfm's
+
+A last way is to remove terms by quantity. According to Zipf's law common terms are rare and rare terms are common. A corpus contains many words that have no discriminative character and many words that are so rare that we can't sensibly connect them to a concept. Quanteda offers a number of tools to trim your dfm based on termfrequencies.
+
+
+```{r}
+dfc<-dfm_trim(dfc,max_termfreq = .99,termfreq_type = "quantile",verbose = T)
+dfc<-dfm_trim(dfc,min_termfreq = .7,termfreq_type = "quantile",verbose = T)
+
+
+
+```
+
+You can also remove terms based on in how documents they occur. This is useful if you are doing machine learning on BOW's, as they allow removing terms that are unique and would be ignored anyway. 
+
+```{r}
+dfc<-dfm_trim(dfc,max_docfreq = 10000,docfreq_type = "count",verbose = T)
+dfc<-dfm_trim(dfc,min_docfreq = 100,docfreq_type = "count",verbose = T)
+
+
+
+```
+
+
+
+```{r}
+
+dfm_ng<-dfm(tokens_ngrams(tokens_select(ft,pattern=stopwords("en"),selection='remove')))
+dfm_ng<-dfm_trim(dfm_ng,max_termfreq = .95,termfreq_type = "quantile",verbose = T)
+dfm_ng<-dfm_trim(dfm_ng,min_termfreq = .95,termfreq_type = "quantile",verbose = T)
+
+
+
+```
+
+
+```{r}
+par(mar=c(8,13,4,2)+0.1)
+scores<-topfeatures(dfm_ng,40)
+scores<-scores[order(scores,decreasing =F)]
+barplot(scores,
+        horiz=TRUE,las=1,cex.axis =.2)
+
+
+```
+
+
+A very simple way to do this we learned to apply last week: Dictionary analysis. Here the researcher chooses which terms are relevant.
+
+
+
+
+## Dictionary Analysis Revisited
+
+Now that you know how to count words, we can relate this back to our course in a very minimal way. We will learn over the next 4 weeks how to use word frequencies to estimate the topics of text - we will use supervised machine learning and unsupervised topic models. But before we start, let
+s use the simplest method there is. The dictionary approach. Dictionaries are pretty much what they sound like. They "translate" words into categories. 
+
+Human experts develop them to look up texts for keywords. One of the first contributions to this in political science is the work of Laver/Garry 2000. They developed 9 top level categories and diverse subcategories for the english manifestos you have been looking at today. I show you today the environemt category deployed in this dictionary. But first, we must build it.
+
+
+```{r}
+env<-tolower(c("clima*","environ*","emission*"))
+env_dict<-list(env=env)
+env_dict<-dictionary(env_dict)
+``` 
+
+
+After we do this, we transform our dfm in only counting terms which are mentioned in the coding category, and other words.
+
+```{r}
+
+
+btw_env <- dfm(dfc, dictionary = env_dict) 
+env <- as.numeric(btw_env[,"env"]) # only positive mentions of the words in category environment
+docvars(dfc,"env")<-env/ntoken(dfc) # compute the share
+```
+
+
+
+
+
+And now, we can plot the relative mentioning of all parties about this topic. 
+
+```{r}
+
+
+plot(docvars(dfc,"env")~as.factor(docvars(dfc,"party")), las=2,xlab=NULL,ylab=NULL,cex.axis=0.5)
+
+```
+
+
+```{r}
+
+table(docvars(dfc,"env")>0,docvars(dfc,"topic")==7) # compute the share
+
+
+```
+
+Obviously, our 3-term dictionary did not do very well. But let's see if we can make this better. 
+
+
+There are two types of errors: terms might mean something different, depending on context, and there might be many terms to describe the same concept. The latter is a typical "out-of-vocabulary" problem. Our words are pretty precise, but we don't really know what other ways might exist to talk about this.
+
+
+### Word Embeddings
+
+Up until now we have used words basically as numbers. Each word has an index, and we can infer meaning from it because we know the word. This process of inferring meaning from a word is something humans are extremely good at. We don't need dictionaries to understand what something means. If I tell you that "affgsadsd" is something best served cold, enjoyed in company and in moderation, we have an idea of what "affgsadsd" is, even without being a meaningful label. As the saying says: We know a word by the company it keeps. The second part of this script is to represent text not by indexes, but quantified meaning. Now we will learn about word embeddings.
+
+This is not the normal way to teach this. Typically, you will first learn bag-of-words applications, like supervised machine learning or topic models, before we move to word embeddings. But I think this is a good place to put it, as it allows to demonstrate the real use of word embeddings. Often enough, I see them taught as mere play things (because they are awesome) with no real application. And the truth is, they don't really have any application except representing language numerically. This is the point: word embeddings have the same function in NLP as creating a dfm. They turn text into a matrix to do math on, but in contrast to dfm's they capture not occurrence in documents, but occurence in language. Word embeddings are used in basically all advanced NLP processes, because in the end, they are a way of extremely high end preprocessing. They allow merging terms that sound differently but mean the same, and change the meaning of words depending on the context they are in. If you use word embeddings on parliamentary speech, the words Bill or Party will get another (context-specific more correct) meaning that they do in the regular language. Accordingly, word embeddings help you solve many problems of text analysis on the fly. 
+
+
+This session will introduce the intution and technical applications of word embeddings. To do this, we use the text2vec package. 
+
+
+
+### What are Word Embeddings?
+
+Just like dfm's word embeddings are a way to represent words using vectors. In a dfm, every word is a vector of its document occurrences, mapped to an index. Word embeddings however build on vector SEMANTICS so the numbers in the vector relate to semantic meaning. This meaning is expressed through the fact that words that are semantically related (synonyms, neighbours) are numerically close and therefore spatially proximate. 
+
+These STATIC embeddings therefore solve the problem of complexity in language, as terms that are used in a similar manner are close numerically. Today, we will focus on static embedding, allowing every word to have one context dependent meaning. To find the meaning in a specific corpus, we train a model on this corpus. We create locally trained embeddings.
+
+
+### Algorithms for Static Embeddings 
+
+There are two major algorithms to compute word embeddings, word2vec and GloVe. They produce very similar resuls, and an exact description how word2vec works can be found in the assigned reading. However, to understand this some supervised learning methodology is required, so we talk about this model more in context of contextual embeddings, as they apply a similar approach. Today, we will focus on glove, as it is an unsupervised method.
+
+GloVe (Global Vectors) is an algorithm that is close to factor analysis, as it uses singular value decomposition on a type of dfm. Instead of a term document matrix, it uses a term-context-matrix. Instead of producing vectors of occurence in documents, these documents a word windows around each word. So a "document" is a moving window over all terms +/- 5 in each direction. This allows to look at the context of word use. 
+
+This contrasts to a skipgram model, a self-supervised ML application used in word2vec, where a supervised classifier tries to predict the following word (not unlike auto-complete in your cellphone). These methods are fundamentally different, but return very similar results. The main advantage of GloVe is that it does not only look at local contexts, but can connect different pairs of terms in documents due to the TCM. This is why it is called Global Vectors. 
+
+We will today talk about GloVe, because we will talk more about PCA next week. 
+
+So let's start: first, we create a dataset out of the corpus again, because we can't train embeddings in an quanteda framework (yet, to my knowledge).
+
+```{r}
+
+uk<-df
+uk$text<-as.character(uk_corp)
+
+```
+
+
+We load text2vec
+```{r}
+library(text2vec)
+
+```
+
+And create the term-context-matrix. 
+
+```{r}
+# Create vocabulary. Terms will be unigrams (simple words).
+it = itoken(uk$text, progressbar = T,tolower,word_tokenizer)
+
+vocab <- create_vocabulary(it)
+
+vectorizer <- vocab_vectorizer(vocab)
+tcm <- create_tcm(it, vectorizer, skip_grams_window = 5L)
+
+```
+
+A brief glance at the data shows us, that the matrix is symmetric with rownames = colnames.
+
+We then train the model. We define the rank, meaning how many word vectors we want in the end. 
+Instead of SPARSE matrix, we produce a DENSE matrix, meaning there are basically no 0's in the 300 dimensions. To be honest, nobody really knows why 300 is the default. It seems to work fine in most cases without killing your computer. Please feel free to adjust the n_threads argument: here you can tell the computer how many processors of your machine it may use. 
+
+There are two more hyperparameters that we will talk about later in this course when we talk about neural networks: learning rate, number of iterations and convergence tolerance. For now, it suffices to say that these default values work well on the data, but typically need to be adjusted based on your data.
+
+The model will then start and optimize the word embeddings
+
+```{r}
+
+glove = GlobalVectors$new(rank=300, x_max = 10,learning_rate = 0.05)
+uk_wv_main<-glove$fit_transform(tcm,n_iter = 100, convergence_tol = 0.001, n_threads = 2)
+
+uk_wv_context = glove$components
+
+uk_word_vectors = uk_wv_main + t(uk_wv_context)
+
+
+```
+
+That was some work for your computer.
+
+```{r}
+save(uk_word_vectors,file="embeddings.rdata")
+
+```
+
+Let's check what it made. 
+```{r}
+dim(uk_word_vectors)
+
+```
+
+
+
+## Evaluating Embeddings
+
+
+How do we know what 
+
+
+
+
+They are synonyms
+
+They come from the same semantic field
+
+They come from the same semantic frame
+
+
+
+
+
+
+Let's play a bit with our new embeddings! See if they make sense.
+
+
+
+
+
+
+
+```{r}
+
+w1<-"climate"
+
+
+v1 = uk_word_vectors[w1, , drop = F]
+# ham = uk_word_vectors["hamlet", , drop = F]
+
+cos_sim_v1 = sim2(x = uk_word_vectors, y = v1, method = "cosine", norm = "l2")
+# head(sort(cos_sim_rom[,1], decreasing = T), 10)
+
+head(sort(cos_sim_v1[,1], decreasing = T), 10)
+
+```
+
+
+
+```{r}
+a1<-princomp(uk_word_vectors)
+
+```
+
+
+```{r}
+plot(a1$scores[,1],a1$scores[,2])
+
+words2<-c("climate","environment","change","international","global","future")
+
+for(i in 1:length(words2)){
+text(a1$scores[rownames(a1$scores)==words2[i],1],a1$scores[,2][rownames(a1$scores)==words2[i]],labels=words2[i],col="green")
+}
+
+
+words2<-c("iran","iraq","soldiers","war")
+
+for(i in 1:length(words2)){
+text(a1$scores[rownames(a1$scores)==words2[i],1],a1$scores[,2][rownames(a1$scores)==words2[i]],labels=words2[i],col="blue")
+}
+
+```
+
+
+
+These word embeddings don't work that well...the reason being that 13,000 words, most of which occur once, are not good to build word embeddings. Let's try something else. I put this file in my dropbox, please download it.
+
+```{r}
+manifesto<-uk_word_vectors
+load(url("https://www.dropbox.com/s/r8rjm7sezh8al5s/uk_word_vectors_300.rdata?dl=1"))
+```
+
+As you can see based on the download speed, this is a big file. It is an embedding space of the UK parliament between 2010 and 2015. It is trained on over 300,000 in part very long speeches and is better equipped to measure political speech patterns in the UK. 
+
+```{r}
+save(uk_word_vectors,file="speech_embeddings.rdata")
+
+```
+
+Accordingly, the function defined above might take slightly longer.
+
+```{r}
+
+w1<-"climate"
+
+
+v1 = uk_word_vectors[w1, , drop = F]
+# ham = uk_word_vectors["hamlet", , drop = F]
+
+cos_sim_v1 = sim2(x = uk_word_vectors, y = v1, method = "cosine", norm = "l2")
+# head(sort(cos_sim_rom[,1], decreasing = T), 10)
+
+head(sort(cos_sim_v1[,1], decreasing = T), 10)
+```
+
+Here we can see that the embeddings are getting much better than in the previous dataset.
+
+```{r}
+
+  word="climate"
+  test = uk_word_vectors["bad", , drop = F] -
+    uk_word_vectors["good", , drop = F] +
+    #  uk_word_vectors["father", , drop = F] +
+    #  uk_word_vectors["mother", , drop = F] +
+    uk_word_vectors[word, , drop = F]
+  cos_sim_test = sim2(x = uk_word_vectors, y = test, method = "cosine", norm = "l2")
+  h1<-head(sort(cos_sim_test[,1], decreasing = T), 10)
+    h1[!names(h1)%in%c("woman","man",word)]
+```
+```{r}
+
+  word="climate"
+  test = uk_word_vectors["good", , drop = F] -
+    uk_word_vectors["bad", , drop = F] +
+    #  uk_word_vectors["father", , drop = F] +
+    #  uk_word_vectors["mother", , drop = F] +
+    uk_word_vectors[word, , drop = F]
+  cos_sim_test = sim2(x = uk_word_vectors, y = test, method = "cosine", norm = "l2")
+  h1<-head(sort(cos_sim_test[,1], decreasing = T), 10)
+    h1[!names(h1)%in%c("good","bad",word)]
+```
+
+```{r}
+a1<-princomp(uk_word_vectors)
+
+```
+
+
+```{r}
+plot(a1$scores[,1],a1$scores[,2])
+
+words2<-c("climate","environment","change","international","global","future")
+
+for(i in 1:length(words2)){
+text(a1$scores[rownames(a1$scores)==words2[i],1],a1$scores[,2][rownames(a1$scores)==words2[i]],labels=words2[i],col="green")
+}
+
+
+words2<-c("iran","iraq","soldiers","war")
+
+for(i in 1:length(words2)){
+text(a1$scores[rownames(a1$scores)==words2[i],1],a1$scores[,2][rownames(a1$scores)==words2[i]],labels=words2[i],col="blue")
+}
+```
+
+
+## Building a better dictionary
+
+We now have an idea about the embedding space we work in. But what to do with it? Blumenau and Hargraves argue that you can improve a dictionary by hand using word embeddings.
+
+
+
+```{r}
+
+
+w1<-"climate"
+
+v1 = uk_word_vectors[w1, , drop = F]
+# ham = uk_word_vectors["hamlet", , drop = F]
+
+cos_sim_v1 = sim2(x = uk_word_vectors, y = v1, method = "cosine", norm = "l2")
+# head(sort(cos_sim_rom[,1], decreasing = T), 10)
+
+w1<-"environment"
+
+v1 = uk_word_vectors[w1, , drop = F]
+# ham = uk_word_vectors["hamlet", , drop = F]
+
+cos_sim_v2 = sim2(x = uk_word_vectors, y = v1, method = "cosine", norm = "l2")
+
+w1<-"emission"
+
+
+v1 = uk_word_vectors[w1, , drop = F]
+# ham = uk_word_vectors["hamlet", , drop = F]
+
+cos_sim_v3 = sim2(x = uk_word_vectors, y = v1, method = "cosine", norm = "l2")
+
+
+
+
+dict<-names(c(head(sort(cos_sim_v1[,1], decreasing = T), 50),head(sort(cos_sim_v2[,1], decreasing = T), 50),head(sort(cos_sim_v3[,1], decreasing = T), 50)))
+
+
+
+```
+
+```{r}
+dict<-dict[!dict%in%stopwords("en")]
+env_dict<-list(env=dict)
+env_dict<-dictionary(env_dict)
+``` 
+
+
+After we do this, we transform our dfm in only counting terms which are mentioned in the coding category, and other words.
+
+```{r}
+
+
+btw_env <- dfm(dfc, dictionary = env_dict) 
+env <- as.numeric(btw_env[,"env"]) # only positive mentions of the words in category environment
+docvars(dfc,"env")<-env/ntoken(dfc) # compute the share
+```
+```{r}
+
+table(docvars(dfc,"env")>0,docvars(dfc,"topic")==7) # compute the share
+
+```
+
+
+
+
+
+
+
+affective meanings
+
+homework: how does your concept of
+
