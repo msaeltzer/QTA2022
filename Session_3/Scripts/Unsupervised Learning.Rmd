@@ -1,0 +1,970 @@
+---
+title: "Unsupervised Learning"
+author: "Marius Saeltzer"
+date: "28 3 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+## Last Time
+
+Turning Text into Data
+  DFM
+  Vectors
+  
+Today: Ways to structure your data, introduction to machine learning 
+
+
+```{r,,message=FALSE,warning=F}
+
+if(!require(quanteda)){install.packages("quanteda")}
+if(!require(text2vec)){install.packages("text2vec")}
+if(!require(seededlda)){install.packages("seededlda")}
+if(!require(vegan)){install.packages("vegan")}
+if(!require(stm)){install.packages("stm")}
+
+```
+
+
+# Machine Learning
+
+After we learned how to represent text as data in the previous session, let's start working with DFM's. We will now slowly move towards machine learning. 
+
+## A Brief history of text analysis in Political Science
+
+As I mentioned, large projects of corpus analytics started in the form of the Manifesto project, where manual coding of political issues was applied on a large scale for the first time. While this data set was important, it quickly drew scholars that tried to find a cheaper way to achieve the same results. Laver & Gerry 2001 oriented themselves on dictionary approaches to move from content analysis to AUTOMATED content analysis. Technically, this is where are in the course right now. The group around Ken Benoit introduced methods we would today describe as machine learning, using wordscores, as semisupervised methods, and Proksch/Slapin, who first employed a real machine learning approach in political science. As you can see, the CMP has been a trailblazer for these methods in PolSci. At the same time Justin Grimmer and Brandon Stewart introdcuced topic models in the American Literature. Today, I am going focus on these models, with a modern twist,
+
+Unsupervised 
+
+
+There are 4 kinds, basically:
+
+
+  ## Unsupervised
+  
+  Identifying dominant structre and patterns in data
+
+  ## Semi Supervised
+  
+  Learning exogenous Structures to identify according patterns
+  
+  ## Supervised
+
+  "Minimal Supervision": Minimal exogenous input to identify specific patterns
+
+  ## (Reinforcement): Learning by abstract aims (not in text analysis)
+
+
+
+
+
+## Today: Unsupervised and Semi-Supervised
+
+
+Aim: Find most important dimenmsions
+
+
+Methods: 
+  
+  Dimensional Reduction
+  
+  Clustering 
+  
+  Text Analysis: Document Similarity
+  
+  
+Applications: 
+
+  Data description
+  
+  Finding patterns in vast data 
+
+  Analyzing unlabeled text 
+  
+  
+
+
+## Dimensional Reduction
+
+
+
+What does scaling mean? It means putting things on a continuous line, or dimension. In political science, you mostly mean "ideological" scaling of political positions. They all have in common the idea that there is a latent, continuos construct that we can uncover from some sort of behaviour. Traditionally, this has been done to items in surveys, where you "scale" them into a scale. If this does feel familiar to what I described as dimensional reduction, you are correct. In the latter case, princical component analysis is used to identify which items "load" on a common factor. This factor is a dimension. From 5 items, we go down to a single continous one. This is dimensional reduction, moving from 5 to 1. The idea is that you can represent something that is complex by something simpler without loosing too much information. I like the analogy of a televsision screen: the camera maps what is happening from 3 dimensions to 2, but ususally that is enough to see what is going on. We did not need the third dimension to describe the thing. 
+
+This analyogy can be taken to text also. We did so last week when we represented text using word embedding vectors, and then furthermore reduced it into principle components to further visualize it. Dimensional reduction can be a powerful tool to apply to any sort of data, as it discards useless complexity and keeps what is interesting. This is why dim reduction is such an important tool for data analysis, particularly machine learning and text analysis. As you will see in this session, it can be used for anything. Before you try to understand something, throw it into a PCA ;)
+
+
+
+
+```{r}
+
+
+```
+
+Today, I will introduce a new dataset: the German Manifesto Corpus. I choose the German case not because I speak German, but because it is a very good illustration of a multidimensional policy space, something we don't have in the UK manifesto corpus, but is very important to apply. Our aim is to recover "ideology" or political positions of German parties. So what does that mean for the non pol-sci crowd? Political positons are something most people have. We have opinions on political decisions or proposals. However, we rarely have opinions on ALL of them (how could we). The complexity of the political space is enourmous, so we use heuristics to compare our opinion to the positions of others. This, we typically do in a spatial manner, describing ourselves as "left" or "right" (of something). As you can see, this spatial thinking already leads itself to thinking in dimensions, and the idea that we reduce the complexity of individual polititcal opinions to a common political dimension speaks to the idea of dimensional reduction. This means, that we could try to destill a political "dimension" out of individual political positions. 
+
+These individual positions are coded in a codebook.
+
+```{r}
+load("../data/codebook.rdata")
+
+```
+
+In the CMP coding process, all text is separated in quasi-sentences (subsentences that contain a codebale unit), and then coded according to their issue (social welfare, national way of life, law and crime etc.), and then again according to the position taking towards it (pro/contra). Typically, things emphasized in manifestos are always positive and parties relate to different framings of the same concept. So if taxes should be increased to finance social welfare, the party will not emphasize taxes, but social welfare, while the opponent of the policy emphasizes taxes. 
+
+This idea is called saliency theory and was established by Budge/Klingemann 1984 in the context of the project. This saliency theory links text used in manifestos to politically relevant spatial positions.
+
+The CMP codebook 
+
+```{r}
+
+load("../data/manifesto_corpus.rdata")
+
+corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
+corp<-corp[as.Date(corp$edate)<as.Date("2014-01-01"),]
+corp<-corp[corp$partyabbrev!="AfD",]
+corp<-corp[corp$partyabbrev!="Pirates",]
+
+
+```
+
+```{r}
+names(corp)
+
+  cb<-cb[cb$variable_name%in%names(corp),]
+
+  save(cb,file="../data/codebook.rdata")
+names()
+  
+  
+```
+
+
+In terms of the manifesto corpus, this is to some degree already done. It is annotated not only by political issues, but the also with polar political positions on the issue. In other words, we know the political positions stated in the election manifestos. The creators of the manifesto database have built for us a theory informed scale of political positions associated with "left" and "right". The result is the RILE score, that sums of the positions of political parties and maps it into a dimension based on predetermined policy associations. For example the policy dimension "pro social welfare" is left, while "reduce taxes" is conservative.
+
+Let's take a look at this by party
+
+```{r}
+plot(corp$rile~as.factor(corp$partyabbrev))
+
+
+```
+As we see, this speaks to our intuition. So if we run a dimensional reduction on these issues, we might find the same?
+As I mentioned, the manifesto corpus is so kind to count the occurences of each category. Let's do some dimensional reduction on these CODED texts first. 
+We extract the matrix we want to scale, replace all NA's by 0's and round them (because the method we use wants counts, just ignore this)
+
+
+
+
+```{r}
+names(corp)
+mat<-corp[,c(28:169)]
+names(mat)<-cb$title[-1]
+mat<-round(mat,0)
+mat[is.na(mat)]<-0
+```
+
+We now use the package vegan for correspondence analysis. CA is a special case of principal component analysis that I really like because it allows easy access to a large number of interesting statistics. 
+
+As we can see here it applies a Singular Value decomposition to create two matrices: a document x factor matrix, and a factor x dv matrix
+
+
+```{r}
+
+v1<-vegan::cca(mat)
+terms<-v1$CA$v
+positions<-v1$CA$u
+
+mx<-cbind(corp[,c(1:27,170:75)],positions)
+```
+
+
+```{r}
+
+plot(mx$CA1,mx$CA2,col="white")
+text(mx$CA1,mx$CA2,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
+```
+```{r}
+
+plot(mx$CA1,mx$CA3,col="white")
+text(mx$CA1,mx$CA3,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
+```
+
+
+```{r}
+plot(mx$CA1,mx$rile,col="white")
+text(mx$CA1,mx$rile,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
+```
+
+
+Now, what drives this composition? One of the great features of SVD Approaches is that you can not only map the left-hand-matrix, (positions) but also the right hand matrix in the same vector space. Now, what is the right hand matrix? It contains the weights of the scaled features on the same dimensions. This makes interpretation easier. The following so called bi-plot shows which categories were indicative for the respective position: 
+
+
+```{r}
+terms<-as.data.frame(v1$CA$v)
+
+plot(terms$CA1,terms$CA3,col="white")
+text(terms$CA1,terms$CA3,labels = rownames(terms),cex=.5)
+points(mx$CA1,mx$CA3,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)])
+
+```
+
+
+
+
+
+
+```{r}
+cor(mx$CA1,mx$rile)
+
+```
+
+
+
+### Adding the AfD
+
+We looked at a perfect example now, which is one of the reasons we like to use this data. However, this method can lead to instability. Since 2013, a new party entered the German party system, the right-wing Alternative für Deutschland. Now, where should we put them on the political scale. This was actually a much debated question: while today we identify them as extreme-right, they used to, at least in their manifesto, take a moderate conservative position. Let
+s do this again, but not removing the newer observations!
+
+```{r}
+
+load("../data/manifesto_corpus.rdata")
+load("../data/codebook.rdata")
+
+corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
+
+
+
+```
+
+```{r}
+mat<-corp[,c(28:169)]
+names(mat)<-cb$title[-1]
+mat<-round(mat,0)
+mat[is.na(mat)]<-0
+```
+```{r}
+
+v1<-vegan::cca(mat)
+terms<-v1$CA$v
+positions<-v1$CA$u
+
+mx<-cbind(corp[,c(1:27,170:75)],positions)
+```
+
+Now we see that the AfD after 2013 basically defines its own dimension. 
+ 
+ 
+```{r}
+
+plot(mx$CA1,mx$CA2,col="white")
+text(mx$CA1,mx$CA2,col=c("green","blue","black","yellow","purple","grey","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
+```
+```{r}
+
+plot(mx$CA2,mx$CA3,col="white")
+text(mx$CA2,mx$CA3,col=c("green","blue","black","yellow","purple","grey","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
+```
+
+
+```{r}
+
+plot(mx$CA1,mx$CA2,col="white")
+text(mx$CA1,mx$CA2,col=c("green","blue","black","yellow","purple","grey","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
+```
+
+```{r}
+
+terms<-as.data.frame(v1$CA$v)
+
+plot(terms$CA1,terms$CA3,col="white")
+text(terms$CA1,terms$CA3,labels = rownames(terms),cex=.5)
+points(mx$CA1,mx$CA3,col=c("green","blue","black","yellow","purple","grey","red")[as.factor(mx$partyabbrev)])
+
+```
+A short look into the dimension shows pretty clearly: the categories newly added to the scheme (Immigation: Negative) which were not present in the original dataset are driving this extrem divide.
+
+
+```{r}
+plot(mx$CA3,mx$rile,col="white")
+text(mx$CA3,mx$rile,col=c("green","blue","black","yellow","purple","grey","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
+```
+
+
+
+
+### Text Scaling
+
+
+Now that we have looked at the already cooked scores we see that there are fundamental problems when we use coding schemes. But can we do better with text analysis? The great thing about SVD is that you can apply it basically to anything, from survey items, over coded text, to text. As we saw last week, we reduce language to a matrix of sparse (dfm) or dense (embeddings) word representations. Now, we will focus on the application on dfm's.
+
+First, we do the most basic preprossesing steps:
+```{r}
+
+load("../data/manifesto_corpus.rdata")
+load("../data/codebook.rdata")
+
+corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
+corp<-corp[as.Date(corp$edate)<as.Date("2014-01-01"),]
+corp<-corp[corp$partyabbrev!="AfD",]
+corp<-corp[corp$partyabbrev!="Pirates",]
+
+
+```
+
+
+```{r}
+corp_de<-corpus(corp,docvars=corp)
+
+toks<-tokens(corp_de,remove_symbols = T,remove_numbers = T,remove_url = T)
+
+dfc2<-dfm(toks)
+
+```
+```{r}
+names(docvars(dfc2))
+```
+
+
+```{r}
+docvars(dfc2,"man")<-paste0(docvars(dfc2,"partyabbrev"),"_",docvars(dfc2,"edate"))
+
+dfg_p<-dfm_group(dfc2,groups = docvars(dfc2,"man"))
+
+dfg_p<-dfm_trim(dfg_p,max_termfreq = 100,verbose = T)
+dfg_p<-dfm_trim(dfg_p,min_termfreq = 10,verbose = T)
+
+```
+
+
+
+
+
+
+```{r}
+library(quanteda.textmodels)
+
+wf<-textmodel_wordfish(dfg_p)
+
+
+```
+
+```{r}
+
+library(quanteda.textplots)
+
+quanteda.textplots::textplot_scale1d(wf)
+
+```
+
+```{r}
+
+cor(wf$theta,docvars(dfg_p,"rile"))
+
+```
+
+
+
+There is a second reason why forms of principal component analysis are so popular in computer science. In contrast to most other techniques, it requires minimal computational power. At the core of PCA lies Singular Value Decomposition, a relatively straightforward matrix algortihm that is perfect for computational implementation. 
+
+
+
+
+
+
+
+```{r}
+m<-convert(dfg_p,to='data.frame')
+me<-docvars(dfg_p)
+rownames(m)<-m[,1]
+m<-m[,-1]
+
+dim(m)
+
+#v1<-vegan::cca(m,Z=as.factor(me$election_id))
+v1<-vegan::cca(m)
+terms<-v1$CA$v
+positions<-v1$CA$u
+
+mx<-cbind(me,positions)
+```
+
+
+
+```{r}
+vegan::eigenvals(v1)
+     
+```
+
+```{r}
+vegan::eigenvals(v1)
+     
+```
+
+
+```{r}
+terms<-v1$CA$v
+positions<-v1$CA$u
+
+mx<-cbind(me,positions)
+```
+
+```{r}
+
+plot(mx$CA1,mx$CA2,col="white")
+text(mx$CA1,mx$CA2,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)],labels = mx$man)
+```
+
+```{r}
+
+plot(mx$CA1,mx$CA3,col="white")
+text(mx$CA1,mx$CA3,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)],labels = mx$man)
+```
+
+```{r}
+
+plot(mx$CA1,mx$rile,col="white")
+text(mx$CA1,mx$rile,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)],labels = mx$man)
+```
+
+```{r}
+cor(mx$CA1,mx$rile)
+cor(mx$CA2,mx$rile)
+
+```
+
+```{r}
+
+terms<-as.data.frame(v1$CA$v)
+
+plot(terms$CA1,terms$CA3,col="white")
+text(terms$CA1,terms$CA3,labels = rownames(terms),cex=.5)
+points(mx$CA1,mx$CA3,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)])
+
+```
+
+
+
+
+## Clustering 
+
+What is a cluster?
+
+Math: LDA
+
+Application: What's in a corpus 
+
+```{r}
+
+load("../data/manifesto_sentences.rdata")
+```
+
+
+### Topic model?
+
+
+
+## The Intuition of Topic Models
+
+To measure salience or agendas, we need to find out what a text is about. The answer can be complicated and multilayered, as it depends on what differences are important to your question. Typically, we can find this out by reading it. For example, we read a news article. 
+We can extract its title, its main message and its general subject. How do we do this? We associate specific words with specific issues. But of course, this is not a natural thing. 
+
+How can we infer from a text what it is about?
+  
+### Clustering Words
+  
+  Typically, specific words are good indicators for topics. Some words are used in any context, while others only in particular issue areas. For example the words "and" "or" etc are common to the english language and exist in any context. Other words, like "climate", "budget" or "gun" are specific to a smaller number of issues areas. 
+
+This basic concept is understood in the idea of the inverse term frequency. Each word has a distribution of use in a language and in a topic. Accordingly, we can infer whether a term belongs to a topic if it is more likely to occur in a topic than in the general language.
+
+We know all of this from supervised scaling. Here we know that there are categories in which words fit. However, now we change something: we can not observe the categories in which words belong, instead we only know two things. 
+
+1) What document a word is in
+2) What other words are in that document
+
+We will therefore create categories by searching up clusters of words that occur overproportionally often together in the same document. 
+
+
+### Example
+
+John is a refugee from Syria. He travelled across Turkey and was detained in a camp for three weeks. He was granted asylum in Germany. 
+
+
+
+John is a  from  He travelled across  and was in a  for three weeks. He was granted  in  
+
+
+will cluster the words refugee, syria, camp, asylum.
+
+If we read the next text
+
+Refugees are often not allowed to work. They live in small housing facilities and are allowed to leave only for brief periods of time. Asylum is not meant to assimilate them into the labor market.
+
+Many Germans are skeptical about the muslims fitting with German culture, leading to a surge in right-wing party votes. 
+
+The words refugee and asylum are here connected to muslim, culture, right wing. 
+
+
+The Chiefs won against the Buccaneers. 
+
+
+## Meeting LDA
+
+
+A clustering algorithm for words!
+  
+  Now back to the question of "topics". How can we find out to which topic a specific text belongs. As we saw above, different newspaper articles about different things use different words and we prepared the data to a degree that we can now "count" the words and categorize.
+
+The idea is simple: text is generated based on underlying latent "topics" and allocates words accordingly. To understand what topic a text has, we need to understand how the text was generated from topics.
+
+
+
+
+
+### Topics in Manifestos
+
+One of the major problems of unsupervised learning is the lack of validation. In terms of scaling, the concept to measure is latent. In terms of topic models, we actually want something that relates to the data: categories of issues. 
+
+We reimport the data again. As above, the data is coded according to the CMP coding scheme.
+
+
+
+
+
+```{r}
+
+m2$manifesto_id<-m2$`x$meta$manifesto_id`
+
+m2$mcat<-gsub("_[0-9]","",m2$variable_name)
+
+corp_sent<-corpus(m2,docvars=m2)
+
+toks<-tokens(corp_sent,remove_symbols = T,remove_numbers = T,remove_url = T)
+
+dfc<-dfm(toks)
+
+
+
+```
+
+Topic models work badly on short text (because there is little overlap). To tackle this, I aggregate on the topic-manifesto level.
+```{r}
+
+```
+
+
+```{r}
+names(docvars(dfc))
+```
+
+Let's take look what is in there!
+
+```{r}
+par(mar=c(15,0,0,0))
+barplot(table(m2$domain_name),las=2)
+
+```
+
+Let's trim this a litte or it takes ages...
+
+
+
+## LDA
+
+
+To do this, we will use the most extensively used algorithm for topic models, LDA
+
+
+Types of Topic Models:
+  
+  
+  Single Member versus Multimember
+
+
+Classic: Latent Derichlet Allocation
+
+Latent = Topics are underyling theoretical constructs which generate text
+
+Derichlet = Fancy Bayesian Version of a Mulitnominal Distribution (conjugate prior)
+
+Allocation = Allocates each text in a 
+
+It starts by giving each document a random class, checks the results and reiterates (a lot!).
+
+
+Instead of using LDA, we use the much faster STM package, which has a nice number of additional diagnostic tools
+
+```{r}
+
+library(stm)
+dfc2<-dfm_trim(dfc2,max_termfreq = 100,verbose = T)
+dfc2<-dfm_trim(dfc2,min_termfreq = 10,verbose = T)
+df_stm2<-convert(dfc2,to="stm")
+
+
+```
+
+
+To run a topic model, you just need to provide the dfm and the number of topics you assume. This might take some time!
+
+How does it work? We tell the computer how many topics are in a corpus. He will compute the probability of each document to be generated by each topic i.e. we get a score for each document x topic, just like in SL.
+
+Supervised classification uses a hard prior and learns terms, and then applies it to new text. Unsupervised classification on the other hand uses an uninformative prior and assumes that any document belongs to a random choice of k categories. 
+
+Then, it checks each word for two things: first, in which document does it occur and second which topics occur in the document. Based on these who empirical observations, we can now change the "topic" of the word. As I said we start with a random distribution.
+
+If we repeat this process over and over again, words that occur in documents which contain the same words are assigned to a topic. By starting with a random distribution and "reshuffling" the relationship between topic to words and documents, we cluster together words that occur along one another. 
+
+This is also the reason why this takes so long ;)
+
+
+So first, let's try to run this on all our data...
+
+```{r}
+
+fit2 <- stm(df_stm2$documents, # the documents
+            df_stm2$vocab, # the words
+            K = 50, # 50 topics
+            max.em.its = 10,
+            # set to run for a maximum of 100 EM iterations
+            data = df_stm$meta, # all the variables (we're not actually including any predictors in this model, though)
+            init.type = "Spectral")  # uses some sort of svd
+
+save(fit2,file="stm2.rdata")
+```
+  
+
+  
+
+```{r, fig.height=16}
+
+plot.STM(fit2)
+
+```
+
+  
+```{r}
+pred<-max.col(fit2$theta)
+dim(pred)
+tops<-cbind(df_stm2$meta,pred)
+
+```
+  
+So what we can see here, that even in the "good" topics, there is little overlap with what we know to be the gold standard. Why is that the case? Well, the overlap between terms is very low if you have very short sentences. As it is not possible to get the parapgraph structure back out of the data, all we can do is combine it based on categories.   
+  
+  
+We create subdocuments in every manifesto in which we merge together things that are broadly in the same category: 
+
+```{r}
+m2$manifesto_id<-m2$`x$meta$manifesto_id`
+
+m2$mcat<-gsub("_[0-9]","",m2$variable_name)
+
+corp_sent<-corpus(m2,docvars=m2)
+
+toks<-tokens(corp_sent,remove_symbols = T,remove_numbers = T,remove_url = T)
+
+dfc<-dfm(toks)
+
+
+
+# create a issue-manifestos variable
+docvars(dfc,"man_cat")<-paste0(docvars(dfc,"mcat"),"_",docvars(dfc,"manifesto_id")) 
+
+# group dfm by this new variable
+dfc_cat<-dfm_group(dfc,docvars(dfc,"man_cat"))
+
+
+# clean it up a bit
+dfc_cat<-dfm_trim(dfc_cat,max_termfreq = 100,verbose = T)
+dfc_cat<-dfm_trim(dfc_cat,min_termfreq = 10,verbose = T)
+
+```
+  
+  
+So: Let's try again with a a more coherent data set: We Again, we turn this back into a stm-dfm.
+  
+```{r}
+
+library(stm)
+
+df_stm<-convert(dfc_cat,to="stm")
+
+
+```
+
+And now run the model, again on 50 categories.
+
+```{r}
+fit1 <- stm(df_stm$documents, # the documents
+            df_stm$vocab, # the words
+            K = 50, # 50 topics
+            max.em.its = 100,
+            # set to run for a maximum of 100 EM iterations
+            data = df_stm$meta, # all the variables (we're not actually including any predictors in this model, though)
+            init.type = "Spectral")  # uses some sort of svd
+
+save(fit1,file="stm.rdata")
+```
+
+
+### Eyeballing
+
+
+
+Let's look at the data again: 
+
+```{r, fig.height=12}
+
+plot.STM(fit1)
+
+```
+
+
+
+
+## Validating Topic Models
+ Since topic models are unsupervised models, validation is the most important step. As many scholars argue, it is mainly a "reading support" and little more. There are two major problems, which are all based on the numbers of topics we choose: are topics which are actually distinct clustered in the same category? Or are topics spread over multiple categories? Did we choose to many topics or to few? Are topics so imbalanced that the computer picked up numerous subtopics of let's say migration but only one topic of foreign affairs? Are foreign affairs and migration clustered into one topic?
+
+To answer these questions, we need to carefully examine results. 
+
+
+```{r}
+pred<-max.col(fit1$theta)
+dim(pred)
+tops<-cbind(df_stm$meta,pred)
+
+```
+
+
+Let's add the labels to make this easier to interpret:  
+```{r}
+tops$mcat<-gsub("_[0-9]","",tops$mcat)
+cb$mcat<-gsub("_[0-9]","",cb$variable_name)#
+cb<-cb[!duplicated(cb$mcat),]
+d3<-merge(cb,tops,by="mcat")
+
+```
+
+
+
+```{r}
+
+er<-d3[d3$label=="military +"|d3$label=="military -" ,]
+
+table(er$pred)     
+    
+```
+
+Of course, this is nicely curated, as we basically gave the model precoded stuff to learn from....
+BUT we see that if there is structure in the data, the topic model will find it ;)
+
+Let's recreate the full dfm.
+```{r}
+
+
+dfc3<-dfm(toks)
+
+```
+
+It's easy for the model to correctly id gigantic documents trained based on labels. But one of the great features of any sort of model, is its ability to transfer to other data (or in this case, the original version of the data). 
+
+Almost all models in R have a predict method. It allows using what the model has learned to apply to new data. In this case we can now use the model trained on the manfiesto~issue level, back to classify the sentence level data. 
+
+```{r}
+
+
+pred<-predict(sl1,newdata=dfc3)
+table(pred,docvars(dfc3,"label"))
+
+```
+
+
+
+
+### Is it all the Same?
+
+Based on what we learned today, we saw that both clustering and scaling algorithms create connections between underlying dimensions, terms, and documents. The main difference is a) where we cut the dimension off and, honestly, what we scale. In terms of manifestos, we interpreted a component as ideology. But is this really what this is? Isn't it mere text similarity, but ordered?
+
+If you investigate the history of these methods, you find the first approach to scaling a DFM, latent semantic analysis, as a method for topic modeling! () If you take a closer look, STM uses "spectral initialization", which is nothing but a SVD ;)
+
+This is not a coincidence. Let's see if we can reconstruct a scaling algorithm using a topic model. To do this, we try to approach our first task, scaling manifestos. We take the same steps as above, preprocessing and filtering the data. 
+
+
+
+```{r}
+load("../data/manifesto_corpus.rdata")
+corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
+
+corp_de<-corpus(corp,docvars=corp)
+
+toks<-tokens(corp_de,remove_symbols = T,remove_numbers = T,remove_url = T)
+
+dfc2<-dfm(toks)
+
+docvars(dfc2,"man")<-paste0(docvars(dfc2,"partyabbrev"),"_",docvars(dfc2,"edate"))
+
+dfg_p<-dfm_group(dfc2,groups = docvars(dfc2,"man"))
+
+dfg_p<-dfm_trim(dfg_p,max_termfreq = 100,verbose = T)
+dfg_p<-dfm_trim(dfg_p,min_termfreq = 10,verbose = T)
+
+```
+
+We then apply the STM pipeline we used in the topic model section...
+
+
+
+```{r}
+library(seededlda)
+sl2<-seededlda::textmodel_lda(dfg_p,k=5)
+```
+
+
+```{r}
+thet<-as.data.frame(sl2$theta)
+thet<-thet
+#thet<-round(thet,2)
+
+dim<-cbind(docvars(dfg_p),thet)
+names(dim)
+```
+
+
+
+```{r}
+
+plot(dim$topic1,dim$topic5,col="white")
+text(dim$topic1,dim$topic5,col=c("green","dark blue","black","yellow","purple","grey","red")[as.factor(dim$partyabbrev)],labels = dim$man)
+```
+
+```{r}
+dim$v_merged<-dim$topic1-dim$topic2-dim$topic5+dim$topic3+dim$topic4
+plot(dim$v_merged,dim$rile,col="white")
+
+text(dim$v_merged,dim$rile,col=c("green","dark blue","black","yellow","purple","grey","red")[as.factor(dim$partyabbrev)],labels = dim$man)
+
+```
+```{r}
+  cor(dim$v_merged,dim$rile)
+
+```
+
+
+```{r}
+
+library(stm)
+
+df_stm3<-convert(dfg_p,to="stm")
+
+
+```
+
+...and now run the model, but only on 5 categories. Why 5? We want to look at five dimensions!
+
+
+```{r}
+fit3 <- stm(df_stm3$documents, # the documents
+            df_stm3$vocab, # the words
+            K = 5, # 50 topics
+            max.em.its = 100,
+            # set to run for a maximum of 100 EM iterations
+            data = df_stm3$meta, # all the variables (we're not actually including any predictors in this model, though)
+            init.type = "Spectral")  # uses some sort of svd
+
+save(fit3,file="stm3.rdata")
+
+
+```
+
+This model converges very quickly, as it starts from an SVD and only optimizes 5 dims on 35 obs.
+
+We then change something. Instead of predicting the most likely column, we use the prediction probabilities for each topic. So each manifesto can be a continious mixture of topics.
+
+
+```{r}
+thet<-as.data.frame(fit3$theta)
+thet<-thet*1000
+#thet<-round(thet,2)
+
+dim<-cbind(docvars(dfg_p),thet)
+```
+
+
+
+```{r}
+plot(dim$V3*100,dim$V2*100)
+  
+```
+```{r}
+
+plot(dim$V5,dim$V2,col="white")
+text(dim$V5,dim$V2,col=c("green","black","yellow","purple","red")[as.factor(dim$partyabbrev)],labels = dim$man)
+```
+
+```{r}
+
+plot(dim$V5,dim$V2,col="white")
+text(dim$V5,dim$V2,col=c("green","black","yellow","purple","red")[as.factor(dim$partyabbrev)],labels = dim$man)
+```
+```{r}
+dim$v_merged<-dim$V5+dim$V1-dim$V3-dim$V2
+
+
+  plot(dim$v_merged,dim$rile,col="white")
+text(dim$v_merged,dim$rile,col=c("green","dark blue","black","yellow","purple","grey","red")[as.factor(dim$partyabbrev)],labels = dim$man)
+
+```
+```{r}
+  cor(dim$v_merged,dim$rile)
+
+```
+
+But: is this really ideology, or is the model just better in picking up particular party elements?
+
+
+
+
+
+## Caveats
+
+The common problem of all approaches of unsupervised learning is that you don't know if the extracted concept relates to your research question and the concept you want to operationalize. In the end, it is based on the hope that the dimension you are interested in is also the dimension that is most important in the data. 
+
+How to deal with this: 
+
+1) Validation: Make sure you have transparent expectations and find ways to make sense of your data. This validation should be based on criteria that relate to your question, semantic coherence and if possible, a coded validation set. 
+
+
+2) Uncovering dimensions: If you find out that your dimension is not the one you are looking for, think about how to augment your data to do this. Of course this has caveats: the more you specificy your data, the less generalizeable is your approach in other contexts. 
+
+  a) Subset data: If you can identify the problems in your data, maybe you can remove them. Example: If you have multilingual text, the different languages will be your main dimension. If you have time-structures in your text, this might be a (biasing) first dimension.
+  
+  b) Go deeper. Inspect not only the first iteration of results, but look deeper if you can find the dimension of interest deeper in the results.
+
+
+  c) Include meta data:
+    Using canonical correspondence analysis or structural topic models allows you to remove dimensions that overlay your variables of interes
+
+
+  d) Use semisupervised methods: If you have a clear idea what dimension you want to identify, it can help to "nudge" your models using seeded topic models or dictionary seedwords in Latent Semantic Scaling .
+  
+  
+  ### Wordscores 
+  
+  
+  ### Latent Semantic Scaling
+  
+  ### Seeded LDA
+
+
+
+
+
+
+
+
+
+
