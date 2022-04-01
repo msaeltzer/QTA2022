@@ -26,6 +26,8 @@ if(!require(text2vec)){install.packages("text2vec")}
 if(!require(seededlda)){install.packages("seededlda")}
 if(!require(vegan)){install.packages("vegan")}
 if(!require(stm)){install.packages("stm")}
+if(!require(quanteda.textmodels)){install.packages("quanteda.textmodels")}
+if(!require(quanteda.textplots)){install.packages("quanteda.textplots")}
 
 ```
 
@@ -109,7 +111,7 @@ Today, I will introduce a new dataset: the German Manifesto Corpus. I choose the
 These individual positions are coded in a codebook.
 
 ```{r}
-load("../data/codebook.rdata")
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/data/codebook.rdata"))
 
 ```
 
@@ -120,8 +122,9 @@ This idea is called saliency theory and was established by Budge/Klingemann 1984
 The CMP codebook 
 
 ```{r}
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/manifesto_corpus.rdata"))
 
-load("../data/manifesto_corpus.rdata")
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/manifesto_corpus.rdata"))
 
 corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
 corp<-corp[as.Date(corp$edate)<as.Date("2014-01-01"),]
@@ -231,8 +234,8 @@ s do this again, but not removing the newer observations!
 
 ```{r}
 
-load("../data/manifesto_corpus.rdata")
-load("../data/codebook.rdata")
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/manifesto_corpus.rdata"))
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/codebook.rdata"))
 
 corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
 
@@ -304,8 +307,7 @@ Now that we have looked at the already cooked scores we see that there are funda
 First, we do the most basic preprossesing steps:
 ```{r}
 
-load("../data/manifesto_corpus.rdata")
-load("../data/codebook.rdata")
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/manifesto_corpus.rdata"))
 
 corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
 corp<-corp[as.Date(corp$edate)<as.Date("2014-01-01"),]
@@ -340,17 +342,19 @@ dfg_p<-dfm_trim(dfg_p,min_termfreq = 10,verbose = T)
 ```
 
 
-
+The classic version of this analysis is Wordfish, a unidimensional IRT model.
 
 
 
 ```{r}
 library(quanteda.textmodels)
 
-wf<-textmodel_wordfish(dfg_p)
+wf<-textmodel_wordfish(dfg_p) # sparse?
 
 
 ```
+
+We can visualize the results
 
 ```{r}
 
@@ -372,10 +376,6 @@ There is a second reason why forms of principal component analysis are so popula
 
 
 
-
-
-
-
 ```{r}
 m<-convert(dfg_p,to='data.frame')
 me<-docvars(dfg_p)
@@ -386,26 +386,6 @@ dim(m)
 
 #v1<-vegan::cca(m,Z=as.factor(me$election_id))
 v1<-vegan::cca(m)
-terms<-v1$CA$v
-positions<-v1$CA$u
-
-mx<-cbind(me,positions)
-```
-
-
-
-```{r}
-vegan::eigenvals(v1)
-     
-```
-
-```{r}
-vegan::eigenvals(v1)
-     
-```
-
-
-```{r}
 terms<-v1$CA$v
 positions<-v1$CA$u
 
@@ -449,21 +429,12 @@ points(mx$CA1,mx$CA3,col=c("green","black","yellow","purple","red")[as.factor(mx
 
 
 
-## Clustering 
-
-What is a cluster?
-
-Math: LDA
-
-Application: What's in a corpus 
+## Topic Models 
 
 ```{r}
 
-load("../data/manifesto_sentences.rdata")
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/manifesto_sentences.rdata"))
 ```
-
-
-### Topic model?
 
 
 
@@ -529,9 +500,6 @@ The idea is simple: text is generated based on underlying latent "topics" and al
 One of the major problems of unsupervised learning is the lack of validation. In terms of scaling, the concept to measure is latent. In terms of topic models, we actually want something that relates to the data: categories of issues. 
 
 We reimport the data again. As above, the data is coded according to the CMP coding scheme.
-
-
-
 
 
 ```{r}
@@ -796,7 +764,7 @@ This is not a coincidence. Let's see if we can reconstruct a scaling algorithm u
 
 
 ```{r}
-load("../data/manifesto_corpus.rdata")
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/manifesto_corpus.rdata"))
 corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
 
 corp_de<-corpus(corp,docvars=corp)
