@@ -64,7 +64,7 @@ There are 4 kinds, basically:
 
 
 
-## Today: Unsupervised and Semi-Supervised
+## Today: Unsupervised 
 
 
 Aim: Find most important dimenmsions
@@ -111,7 +111,7 @@ Today, I will introduce a new dataset: the German Manifesto Corpus. I choose the
 These individual positions are coded in a codebook.
 
 ```{r}
-load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/data/codebook.rdata"))
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/codebook.rdata"))
 
 ```
 
@@ -122,8 +122,6 @@ This idea is called saliency theory and was established by Budge/Klingemann 1984
 The CMP codebook 
 
 ```{r}
-load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/manifesto_corpus.rdata"))
-
 load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_3/Data/manifesto_corpus.rdata"))
 
 corp<-corp[as.Date(corp$edate)>as.Date("1990-01-01"),]
@@ -137,13 +135,10 @@ corp<-corp[corp$partyabbrev!="Pirates",]
 ```{r}
 names(corp)
 
-  cb<-cb[cb$variable_name%in%names(corp),]
-
-  save(cb,file="../data/codebook.rdata")
-names()
-  
-  
 ```
+  
+
+
 
 
 In terms of the manifesto corpus, this is to some degree already done. It is annotated not only by political issues, but the also with polar political positions on the issue. In other words, we know the political positions stated in the election manifestos. The creators of the manifesto database have built for us a theory informed scale of political positions associated with "left" and "right". The result is the RILE score, that sums of the positions of political parties and maps it into a dimension based on predetermined policy associations. For example the policy dimension "pro social welfare" is left, while "reduce taxes" is conservative.
@@ -201,17 +196,20 @@ text(mx$CA1,mx$CA3,col=c("green","black","yellow","purple","red")[as.factor(mx$p
 plot(mx$CA1,mx$rile,col="white")
 text(mx$CA1,mx$rile,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
 ```
+```{r}
+cor(mx$CA1,mx$rile)
+```
 
 
 Now, what drives this composition? One of the great features of SVD Approaches is that you can not only map the left-hand-matrix, (positions) but also the right hand matrix in the same vector space. Now, what is the right hand matrix? It contains the weights of the scaled features on the same dimensions. This makes interpretation easier. The following so called bi-plot shows which categories were indicative for the respective position: 
 
 
-```{r}
+```{r,fig.height=16}
 terms<-as.data.frame(v1$CA$v)
 
-plot(terms$CA1,terms$CA3,col="white")
-text(terms$CA1,terms$CA3,labels = rownames(terms),cex=.5)
-points(mx$CA1,mx$CA3,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)])
+plot(terms$CA1,terms$CA2,col="white")
+text(terms$CA1,terms$CA2,labels = rownames(terms),cex=1.5)
+points(mx$CA1,mx$CA2,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)],cex=1.5)
 
 ```
 
@@ -275,16 +273,16 @@ text(mx$CA2,mx$CA3,col=c("green","blue","black","yellow","purple","grey","red")[
 
 ```{r}
 
-plot(mx$CA1,mx$CA2,col="white")
-text(mx$CA1,mx$CA2,col=c("green","blue","black","yellow","purple","grey","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
+plot(mx$CA1,mx$CA3,col="white")
+text(mx$CA1,mx$CA3,col=c("green","blue","black","yellow","purple","grey","red")[as.factor(mx$partyabbrev)],labels = paste0(mx$partyabbrev,"_",mx$edate))
 ```
 
-```{r}
+```{r,fig.height=16}
 
 terms<-as.data.frame(v1$CA$v)
 
 plot(terms$CA1,terms$CA3,col="white")
-text(terms$CA1,terms$CA3,labels = rownames(terms),cex=.5)
+text(terms$CA1,terms$CA3,labels = rownames(terms),cex=1.5)
 points(mx$CA1,mx$CA3,col=c("green","blue","black","yellow","purple","grey","red")[as.factor(mx$partyabbrev)])
 
 ```
@@ -349,7 +347,7 @@ The classic version of this analysis is Wordfish, a unidimensional IRT model.
 ```{r}
 library(quanteda.textmodels)
 
-wf<-textmodel_wordfish(dfg_p) # sparse?
+wf<-textmodel_wordfish(dfg_p,sparse = T) # sparse?
 
 
 ```
@@ -391,6 +389,11 @@ positions<-v1$CA$u
 
 mx<-cbind(me,positions)
 ```
+```{r}
+eigenvals(v1)
+```
+
+
 
 ```{r}
 
@@ -412,17 +415,19 @@ text(mx$CA1,mx$rile,col=c("green","black","yellow","purple","red")[as.factor(mx$
 
 ```{r}
 cor(mx$CA1,mx$rile)
-cor(mx$CA2,mx$rile)
+cor(mx$CA2,as.numeric(as.Date(mx$edate)))
 
 ```
 
-```{r}
+```{r,fig.height=16}
 
 terms<-as.data.frame(v1$CA$v)
 
 plot(terms$CA1,terms$CA3,col="white")
-text(terms$CA1,terms$CA3,labels = rownames(terms),cex=.5)
+text(terms$CA1,terms$CA3,labels = rownames(terms),cex=1.5)
 points(mx$CA1,mx$CA3,col=c("green","black","yellow","purple","red")[as.factor(mx$partyabbrev)])
+text(terms$CA1[rownames(terms)=="asyl"],terms$CA3[rownames(terms)=="asyl"],labels = rownames(terms)[rownames(terms)=="asyl"],cex=1.5,col="white")
+
 
 ```
 
@@ -568,9 +573,9 @@ Instead of using LDA, we use the much faster STM package, which has a nice numbe
 ```{r}
 
 library(stm)
-dfc2<-dfm_trim(dfc2,max_termfreq = 100,verbose = T)
-dfc2<-dfm_trim(dfc2,min_termfreq = 10,verbose = T)
-df_stm2<-convert(dfc2,to="stm")
+dfc<-dfm_trim(dfc,max_termfreq = 100,verbose = T)
+dfc<-dfm_trim(dfc,min_termfreq = 10,verbose = T)
+df_stm2<-convert(dfc,to="stm")
 
 
 ```
@@ -607,7 +612,7 @@ save(fit2,file="stm2.rdata")
 
   
 
-```{r, fig.height=16}
+```{r, fig.height=12}
 
 plot.STM(fit2)
 
@@ -620,6 +625,14 @@ dim(pred)
 tops<-cbind(df_stm2$meta,pred)
 
 ```
+
+
+```{r}
+
+tx1<-as.data.frame(table(tops$pred,tops$label))
+```
+  
+  
   
 So what we can see here, that even in the "good" topics, there is little overlap with what we know to be the gold standard. Why is that the case? Well, the overlap between terms is very low if you have very short sentences. As it is not possible to get the parapgraph structure back out of the data, all we can do is combine it based on categories.   
   
@@ -662,6 +675,8 @@ library(stm)
 df_stm<-convert(dfc_cat,to="stm")
 
 
+
+
 ```
 
 And now run the model, again on 50 categories.
@@ -700,6 +715,13 @@ plot.STM(fit1)
 To answer these questions, we need to carefully examine results. 
 
 
+
+```{r}
+
+fit1$theta
+
+```
+
 ```{r}
 pred<-max.col(fit1$theta)
 dim(pred)
@@ -717,6 +739,9 @@ d3<-merge(cb,tops,by="mcat")
 
 ```
 
+```{r}
+tx<-as.data.frame(table(d3$pred,d3$label))
+```
 
 
 ```{r}
@@ -809,8 +834,18 @@ plot(dim$topic1,dim$topic5,col="white")
 text(dim$topic1,dim$topic5,col=c("green","dark blue","black","yellow","purple","grey","red")[as.factor(dim$partyabbrev)],labels = dim$man)
 ```
 
+
 ```{r}
-dim$v_merged<-dim$topic1-dim$topic2-dim$topic5+dim$topic3+dim$topic4
+
+plot(dim$topic2,dim$topic3,col="white")
+text(dim$topic2,dim$topic3,col=c("green","dark blue","black","yellow","purple","grey","red")[as.factor(dim$partyabbrev)],labels = dim$man)
+```
+
+
+
+
+```{r}
+dim$v_merged<-dim$topic5-dim$topic1+dim$topic2+dim$topic3-dim$topic4
 plot(dim$v_merged,dim$rile,col="white")
 
 text(dim$v_merged,dim$rile,col=c("green","dark blue","black","yellow","purple","grey","red")[as.factor(dim$partyabbrev)],labels = dim$man)
@@ -925,9 +960,36 @@ How to deal with this:
   
   ### Latent Semantic Scaling
   
+  
+```{r}
+library(LSX)
+
+
+dict<-dictionary(list(left=c("solidarität","grundsicherung"),right=c("schöpfung","migrant")))
+
+ls1<-LSX::textmodel_lss(dfg_p,seeds=dict,k=10)
+
+```
+  
+  
+  
+```{r}
+ha<-head(coef(ls1), 40) # most positive words
+ta<-tail(coef(ls1), 40) # most negative words
+
+```
+  
   ### Seeded LDA
 
 
+```{r}
+
+dict<-dictionary(list(social=c("solidarität","grundsicherung"),mig=c("schöpfung","migrant"),cli=c("klima","klimawandel"),))
+
+
+
+seededlda::textmodel_seededlda(dfc,seeds=)
+```
 
 
 
