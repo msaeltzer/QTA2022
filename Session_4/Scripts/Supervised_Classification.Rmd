@@ -29,18 +29,14 @@ After we learned how to prepare data for text analysis and applied a very simple
 We use human coded LABELS to TRAIN a MODEL.
 
 ```{r}
-#install.packages("caret")
-#install.packages("quanteda.textmodels")
-#install.packages("glmnet")
-#install.packages("quanteda")
-#devtools::install_github("quanteda/quanteda.classifiers") 
+if(!require(quanteda)){install.packages("quanteda")}
+if(!require(glmnet)){install.packages("glmnet")}
+if(!require(caret)){install.packages("caret")}
+if(!require(quanteda.textmodels)){install.packages("quanteda.textmodels")}
+if(!require(keras)){install.packages("keras")}
+if(!require(quanteda)){install.packages("quanteda")}
+if(!require(quanteda.classifiers)){devtools::install_github("quanteda/quanteda.classifiers")}
 
-
-library(quanteda)
-library(glmnet)
-library(caret)
-library(quanteda.textmodels)
-library(keras)
 ```
 
 
@@ -58,7 +54,12 @@ You can find the codebook here:
 https://www.comparativeagendas.net/pages/master-codebook
 
 ```{r}
-load("../data/uk_manifesto.rdata")
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_4/Data/uk_manifesto.rdata"))
+```     
+     
+     
+     
+```{r}  
 df<-check
 
 
@@ -565,6 +566,15 @@ There are several ways to implement this, but the dominant implementation is the
 library(keras)
 
 ```
+
+
+If you don't have python installed, you can download a miniconda environment!
+
+```{r}
+#install_keras()
+```
+
+
 
 First we build a training set compatible with keras. To do this we need to turn the DFM into a regular matrix (a tensor) and do the same with the dependent variable. To do this, we need to encode each variable as a set of dummies, so called one-hot encoding.
 
