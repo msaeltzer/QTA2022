@@ -1,0 +1,370 @@
+---
+title: "Supervised Classification"
+author: "Marius Sältzer"
+date: "14 11 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Last Week and Today 
+
+A text model is a "simplification" of text. It allows computer to find the most important features in human language for a specified task. In other words, he wants to find the important FEATURES (in this case words) that allow him to solve this task. 
+
+This task is to categorize text. A model makes predictions for each text in what category it falls. If you have 2 categories, it will try to classify each text into those 2 categories. To teach the computer how to do this, we need to TRAIN it. Training means that we feed data into a model that then starts to evaluate features. It tries to find WEIGHTS for the features. 
+
+We give the computer categories for existing text: we call them LABELS. These labels are exogenous and have to be hand coded. This is what makes a test model 
+SUPERVISED.
+
+
+
+## Supervised Classification
+
+After we learned how to prepare data for text analysis and applied a very simple dictionary, today we will learn how to automatically classify text using prelabeled data. This is an important distinction. 
+
+
+We use human coded LABELS to TRAIN a MODEL.
+
+## Training a model 
+
+preparation - training - validation - prediction
+
+
+
+
+### Out-of-Sample
+
+In a simple text model, these weight are numbers that associate a feature with categories. After the computer learned which features are associated with which category, it now has learned what makes a text belong to a category. 
+
+
+
+We can now apply these weights to new texts, to PREDICT their category. This is called OUT-OF-SAMPLE-PREDICTION.
+
+Typically, before we apply a model to new text, we test it. We typically split our coded data into training data and test data. Then we see how well our model predicts the classes in the test data (for which we also know the labels). If the model is accurate, we can use it for out-of-sample prediction. However, this is tricky. Since the computer only learns to evaluate words and categories from the training sample, it does not know words which are only in the new data. 
+
+```{r}
+#install.packages("caret")
+#install.packages("quanteda.textmodels")
+#install.packages("glmnet")
+#install.packages("quanteda")
+#devtools::install_github("quanteda/quanteda.classifiers") 
+
+
+library(quanteda)
+library(glmnet)
+library(caret)
+library(quanteda.textmodels)
+library(keras)
+```
+
+
+### Using the whole corpus: 
+
+After we developed  a use case, we can now see how the model performs on the whole dataset. While naive bayes comes 
+
+
+```{r}
+load("../data/uk_manifesto.rdata")
+df<-check
+uk_corp<-corpus(check$`texts(uk_corp)`,docvars=check)
+ft<-tokens(uk_corp,remove_punct=T,remove_numbers = T)
+ft<-tokens_tolower(ft)
+ft<-tokens_select(ft,pattern=stopwords("en"),selection='remove')
+
+dfc<-dfm(ft)
+```
+
+
+
+This is the code from above, but pressed into one chunk;) 
+```{r}
+id_train <- sample(1:nrow(df), round(nrow(df)/4,0), replace = FALSE)
+docvars(ft,"id_numeric") <- 1:ndoc(ft)
+dfmat_training <- dfm(tokens_subset(ft, id_numeric %in% id_train))
+dfmat_test <- dfm(tokens_subset(ft, !id_numeric %in% id_train))
+tmod_nb <- textmodel_nb(dfmat_training, docvars(dfmat_training,"topic"))
+dfmat_matched <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+actual_class <- dfmat_matched$topic
+predicted_class <- predict(tmod_nb, dfmat_matched, type = "class")
+tab_class <- table(actual_class, predicted_class)
+confusionMatrix(tab_class, mode = "everything")
+
+```
+
+
+We can see that the benchmark accuracy of a naive model is about .58.
+
+
+So let's see how the other models perform
+```{r}
+y<-as.factor(docvars(dfc,"topic"))
+y2 <- to_categorical(as.integer(y) - 1, num_classes = nlevels(y))
+x_mat<-convert(dfc,to="matrix")
+id_train <- sample(c(T,T,T,F),nrow(x_mat),replace = T)
+x_test<-x_mat[!id_train,]
+y_test <- y2[!id_train,]
+
+x_train<-x_mat[id_train,]
+y_train <- y2[id_train,]
+```
+
+Define the model (now with more classes)
+```{r}
+model0 <- keras_model_sequential() %>%
+        layer_dense(units = 512, input_shape = ncol(x_train), activation = "relu") %>%
+        layer_dropout(rate = .2) %>%
+        layer_dense(units =ncol(y_train), activation = "softmax")
+
+model0 %>%  compile(
+    loss = "categorical_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy"
+  )
+```
+
+Run:
+```{r}
+hist <- model0 %>%
+  fit(
+    x_train,
+    y_train,
+    validation_data = list(x_test, y_test),verbose=1
+  )
+```
+
+What we see here is that after the initial learning phase, it does not get better but starts overfitting the data: you can see that the accuracy gets better, but validation acc slowly decreases. The model therefore "memorizes" the features from the training data, instead of "learning" the underlying concepts. This is of course not what we want to achieve.
+
+
+```{r}
+pred<-predict(model0,x=x_test)
+pred1<-max.col(pred)
+ref<-max.col(y_test)
+t1<-table(as.factor(ref),as.factor(pred1))
+confusionMatrix(t1)
+```
+
+
+
+Let's see how the embedding network works: 
+
+```{r}
+x_mat <- tokens2sequences(ft, maxsenlen = 100, keepn = dfc$nfeatures)
+y<-as.factor(docvars(ft,"topic"))
+y2 <- to_categorical(as.integer(y) - 1, num_classes = nlevels(y))
+id_train <- sample(c(T,T,T,F),nrow(x_mat$matrix),replace = T)
+x_test<-x_mat$matrix[!id_train,]
+y_test <- y2[!id_train,]
+x_train<-x_mat$matrix[id_train,]
+y_train <- y2[id_train,]
+words<-x_mat$nfeatures
+dim(x_train)
+dim(y_train)
+class(y_train)
+```
+
+
+```{r}
+ 
+model <- keras_model_sequential()
+
+model %>%
+        layer_embedding(input_dim = words + 1, output_dim = 300,
+                        input_length = 100) %>%
+        layer_dropout(rate = .2)
+
+model %>%
+        bidirectional(layer_lstm(units = 128, dropout = .2,
+                                 recurrent_dropout = .2)) %>%
+        layer_dense(units = nlevels(y), activation = "softmax")
+
+model %>%  compile(
+    loss = "categorical_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy"
+  )
+```
+
+
+```{r}
+hist <- model %>%
+  fit(
+    x_train,
+    y_train,
+    batch_size = batch_size,
+    epochs = 6,
+    validation_data = list(x_test, y_test),verbose=1
+  )
+```
+
+
+## Pretrained embeddings
+
+```{r}
+
+# load an example dataset from text2vec
+
+# load glove vectors into R
+vectors = data.table::fread('glove.6B.300d.txt', data.table = F,  encoding = 'UTF-8') 
+colnames(vectors) = c('word',paste('dim',1:300,sep = '_'))
+
+
+max_words = 6000
+maxlen = 60
+dim_size = 300
+
+word_seqs = text_tokenizer(num_words = max_words) %>%
+  fit_text_tokenizer(df$`texts(uk_corp)`)
+
+x_train = texts_to_sequences(word_seqs,df$`texts(uk_corp)`) %>%
+  pad_sequences( maxlen = maxlen)
+
+
+y<-as.factor(df$topic)
+y_train <- to_categorical(as.integer(y) - 1, num_classes = nlevels(y))
+
+# unlist word indices
+word_indices = unlist(word_seqs$word_index)
+
+# then place them into data.frame 
+dic = data.frame(word = names(word_indices), key = word_indices, stringsAsFactors = FALSE) %>%
+  arrange(key) %>% .[1:max_words,]
+
+
+dim(dic)
+# join the words with GloVe vectors and
+# if word does not exist in GloVe, then fill NA's with 0
+word_embeds = dic[,1:2]  %>% left_join(vectors) %>% .[,3:302] %>% replace(., is.na(.), 0) %>% as.matrix()
+
+
+dim(vectors)
+# Use Keras Functional API 
+input = layer_input(shape = list(maxlen), name = "input")
+
+
+model = input %>%
+  layer_embedding(input_dim = nrow(word_embeds), output_dim = dim_size, input_length = maxlen, 
+                  # put weights into list and do not allow training
+                  weights = list(word_embeds), trainable = T) %>%
+  layer_spatial_dropout_1d(rate = 0.2 ) %>%
+  bidirectional(
+    layer_gru(units = 80, return_sequences = TRUE) 
+  )
+max_pool = model %>% layer_global_max_pooling_1d()
+ave_pool = model %>% layer_global_average_pooling_1d()
+
+output = layer_concatenate(list(ave_pool, max_pool)) %>%
+  layer_dense(units = nlevels(y), activation = "sigmoid")
+
+model = keras_model(input, output)
+
+# instead of accuracy we can use "AUC" metrics from "tensorflow.keras"
+model %>% compile(
+  optimizer = "adam",
+  loss = "binary_crossentropy",
+  metrics = "accuracy"
+)
+
+history = model %>% keras::fit(
+  x_train, y_train,
+  epochs = 8,
+  batch_size = 32,
+  validation_split = 0.2,verbose=1
+)
+```
+
+
+
+
+
+
+So we see that the general language is okay-ish, but not better than local embeddings. But what about word embbedings from the same context, but with much more text? Can we make use of other language from the same time frame?
+
+
+
+
+```{r}
+
+load("../../session_2/scripts/speech_embeddings.rdata")
+
+dim(uk_word_vectors)
+dim(vectors)
+
+uk_word_vectors<-as.data.frame(uk_word_vectors)
+uk_word_vectors$word<-rownames(uk_word_vectors)
+
+names(uk_word_vectors)[1:300]<-names(vectors)[2:301]
+
+vectors<-uk_word_vectors
+```
+
+
+
+```{r}
+
+max_words = 10000
+maxlen = 60
+dim_size = 300
+
+word_seqs = text_tokenizer(num_words = max_words) %>%
+  fit_text_tokenizer(df$`texts(uk_corp)`)
+
+x_train = texts_to_sequences(word_seqs,df$`texts(uk_corp)`) %>%
+  pad_sequences( maxlen = maxlen)
+
+
+y<-as.factor(df$topic)
+y_train <- to_categorical(as.integer(y) - 1, num_classes = nlevels(y))
+
+# unlist word indices
+word_indices = unlist(word_seqs$word_index)
+
+# then place them into data.frame 
+dic = data.frame(word = names(word_indices), key = word_indices, stringsAsFactors = FALSE) %>%
+  arrange(key) %>% .[1:max_words,]
+
+# join the words with GloVe vectors and
+# if word does not exist in GloVe, then fill NA's with 0
+word_embeds = dic[,1:2]  %>% left_join(vectors) %>% .[,3:302] %>% replace(., is.na(.), 0) %>% as.matrix()
+
+
+
+
+
+dim(word_embeds)
+# Use Keras Functional API 
+input = layer_input(shape = list(maxlen), name = "input")
+
+
+model = input %>%
+  layer_embedding(input_dim = nrow(word_embeds), output_dim = dim_size, input_length = maxlen, 
+                  # put weights into list and do not allow training
+                  weights = list(word_embeds), trainable = T) %>%
+  layer_spatial_dropout_1d(rate = 0.2 ) %>%
+  bidirectional(
+    layer_gru(units = 80, return_sequences = TRUE) 
+  )
+max_pool = model %>% layer_global_max_pooling_1d()
+ave_pool = model %>% layer_global_average_pooling_1d()
+
+output = layer_concatenate(list(ave_pool, max_pool)) %>%
+  layer_dense(units = 2, activation = "sigmoid")
+
+model = keras_model(input, output)
+
+# instead of accuracy we can use "AUC" metrics from "tensorflow.keras"
+model %>% compile(
+  optimizer = "adam",
+  loss = "binary_crossentropy",
+  metrics = "accuracy"
+)
+
+history = model %>% keras::fit(
+  x_train, y_train,
+  epochs = 8,
+  batch_size = 32,
+  validation_split = 0.2,verbose=1
+)
+```
