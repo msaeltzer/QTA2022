@@ -1,0 +1,1018 @@
+---
+title: "Supervised Classification"
+author: "Marius Sältzer"
+date: "14 11 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Last Week and Today 
+
+A text model is a "simplification" of text. It allows computer to find the most important features in human language for a specified task. In other words, he wants to find the important FEATURES (in this case words) that allow him to solve this task. 
+
+This task is to categorize text. A model makes predictions for each text in what category it falls. If you have 2 categories, it will try to classify each text into those 2 categories. To teach the computer how to do this, we need to TRAIN it. Training means that we feed data into a model that then starts to evaluate features. It tries to find WEIGHTS for the features. 
+
+We give the computer categories for existing text: we call them LABELS. These labels are exogenous and have to be hand coded. This is what makes a test model 
+SUPERVISED.
+
+
+
+## Supervised Classification
+
+After we learned how to prepare data for text analysis and applied a very simple dictionary, today we will learn how to automatically classify text using prelabeled data. This is an important distinction. 
+
+
+We use human coded LABELS to TRAIN a MODEL.
+
+```{r}
+#install.packages("caret")
+#install.packages("quanteda.textmodels")
+#install.packages("glmnet")
+#install.packages("quanteda")
+#devtools::install_github("quanteda/quanteda.classifiers") 
+
+
+library(quanteda)
+library(glmnet)
+library(caret)
+library(quanteda.textmodels)
+library(keras)
+```
+
+
+### Preparing the Text Data
+
+The Comparative Agenda Project tries to find out what is on the policy agenda in different countries. To do so, it developed a comparative coding scheme to contain all important issues in politics. 
+We now go through the same preprocessing steps we learned in the previous session!
+
+
+I will do two scripts parallelly today: one is for the session, that only differentiates between Housing and Law and Crime. We can compute this with logisitic regression and later on, it will save us a lot of power and time. 
+
+
+
+You can find the codebook here: 
+https://www.comparativeagendas.net/pages/master-codebook
+
+```{r}
+load("../data/uk_manifesto.rdata")
+df<-check
+
+
+
+uk_corp<-corpus(check$`texts(uk_corp)`,docvars=check)
+ft<-tokens(uk_corp,remove_punct=T,remove_numbers = T)
+ft<-tokens_tolower(ft)
+ft<-tokens_select(ft,pattern=stopwords("en"),selection='remove')
+
+dfc2<-dfm(ft)
+
+
+dfc<-dfm_subset(dfc2,dfc$cat%in%c("Law and Crime","Housing"))
+```
+
+
+
+### Supervised Learning in General
+
+Before we talk about ML in text analysis, let us first discuss how supervised learning relates to things you might already know. Most of you will have a lot of experience with statistical procedures such as linear regressions.
+
+Mathematically speaking you fit a model to minimize the distance from your predictions to the observed values. In other words, you optimize the parameters of a model to fit the data. This way you can test hypotheses about the effect of some variable on another.
+
+Now let's think about another task: classification. In contrast to regression, we do not attempt to estimate the effect of something (or the correlation), but we try to make the general fit of the model as tight as possible. We want to learn the coefficients to understand the generation of Y as good as possible, to make predictions about it. We now move vom a x-centered model to a y-centered model. Instead of finding a correct value, we attempt to maximize the R^2.
+
+But with the change of the aim other problems arise, of course. Prediction implies inferring about the unknown, may it be in the future, or just outside our range. So while running regressions to measure the effect present in a dataset is the right way, it might be problematic to infer from what we learned to predict something else. So if we maximize the fit on given data, how can we infer about unseen data? How do we know that our model does not just see a special feature, that is only in our data but not in future data? 
+
+
+
+### Training / Test Split
+
+To make prediction work, we have to simulate unknown data of which we know the correct results. In other words, we take something away from our model, and do not allow it to see, to then predict it. This Training/Validation split is one of the most compelling argument for supervised learning, as it allows us to validate the model directly. To do this, we must reduce the amount of data a model is allowed to learn a bit. So if you have 20,000 coded texts, we train or model on only 15 k. 
+
+To do this, we do a random split and take 75% as Training and 25% as test data. 
+
+
+
+```{r}
+
+id_train <- sample(1:nrow(df), round(nrow(df)/4,0), replace = FALSE)
+
+docvars(ft,"id_numeric") <- 1:ndoc(ft)
+
+# get training set
+dfmat_training <- dfm(tokens_subset(ft, id_numeric %in% id_train))
+
+# get test set 
+dfmat_test <- dfm(tokens_subset(ft, !id_numeric %in% id_train))
+
+
+```
+
+
+##  Training Models 
+
+We train the model by showing it only two things: a text, and a label what category the text belongs to. We then let the model draw conclusions from the patterns it finds in the data. All supervised machine learning models have this process in common. 
+
+Like a regression analysis, we fit a model Y ~ ß*X, where X is the data, Y is the label and ß are the coefficients the model learns to deal with in the future. After the model has learned, it can be fit on a new X to predict a new Y. 
+
+In machine learning terminology, the DV Y is called LABELS, the variables are called FEATURES and the coeffiecients are called WEIGHTS. As you will see, all ML models basically fall back to this combination of concepts, but differ only 
+
+
+         Which features will we include?
+              NGRAMS
+              Sequences
+        
+         How we combine them:
+              Word Embeddings
+              External information (pretrained embeddings)
+              
+          How we fit the data:
+              Maximum Likelihood (Logistic Regressions)
+              Bayes Rule (Naive Bayes)
+              Backpropragation (Neural Nets)
+         
+         
+
+This leads to a number of archictectures, that are more or less likely used on text as data. 
+
+
+##
+
+LOSS: Distance between predictions and actual value (f.e. sum of squares)
+
+GRADIENT DESCENT: Process of finding parameters that minimize this loss function
+using partial derivative of the loss function with respect to each parameter
+
+
+
+
+## logistic regression
+
+
+
+The most intuitive model for those who have heard statistics is the logistic regression on text. As you can imagine, a dfm is only a large dataframe if you will. 
+
+
+As I mentioned above, the process of fitting a model is find a weight to minimize error. Regression, and in particular logistic regression is a a great way to understand what the model is doing. It derives a LOSS Function and finds its minimum using GRADIENT DESCENT. This is something most SL models have in common.
+
+
+
+
+
+
+
+
+So let us train the model: first, 
+
+```{r}
+
+logi <- cv.glmnet(x = dfmat_training,
+                   y = as.integer(dfmat_training$topic),
+                   family= "binomial")
+
+```
+
+
+So let's see what the model decided upon. What FEATURES are indicative of the housing class?
+
+```{r}
+index_best <- which(logi$lambda == logi$lambda.min)
+beta <- logi$glmnet.fit$beta[, index_best]
+head(sort(beta, decreasing = TRUE), 40)
+
+```
+
+And which are indicative of law and crime?
+
+```{r}
+index_best <- which(logi$lambda == logi$lambda.min)
+beta <- logi$glmnet.fit$beta[, index_best]
+head(sort(beta, decreasing=F), 40)
+
+```
+
+That already looks good! If this were a topic model, we would be happy. Let's see how it OBEJECTIVELY performs.
+
+
+After we TRAIN a model, we want to find out how it performs: we next PREDICT the classes and check how well the model performed.
+
+```{r}
+pred <- predict(logi, dfmat_training,type="class")
+
+
+t1<-table(pred,dfmat_training$topic)
+
+confusionMatrix(t1)$overall[1]
+
+```
+
+Woah nice, problem solved, let's go out there!
+
+Wait...how does the model work so well?
+
+
+As you can assume there is a caveat here. Ask yourself, what does a regression with 6k variables and 4500 cases do? Well yeah, it "overfits". In other words: every individual observation is very likely well described by a unique combination of features. So if you can find a combination of variables to uniquely identify a case, and tell the model to maximize prediction, it will do exactly that (if it optimizes well).
+
+If you like a metaphor: I goes the way of the bad statistics student and memorizes every fact without understanding the concept.
+
+
+## Fit on new data
+
+You want you model to generalize, so you want to evaluate it on its ability to predict UNSEEN, but comparable data. We therefore validate it on the VALIDATION set.  
+
+To do so, we have to make sure that the new data has the same features as the training set. This is particularly problematic in text analysis. While in a regression set you will likely have all the variables in both sets after splitting, this is much more problematic in SPARSE dfms. There could be terms only used in the training data, or there could be new terms only present in the test set. We can't make inferences about the latter and can't use the former. This is the OUT-OF-VOCABULARY problem. We therefore match training data and test data and remove features that are not in both. 
+
+```{r}
+
+dfmat_matched <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+
+pred <- predict(logi, dfmat_matched, type = "class")
+
+
+cbind(dfc$cat,dfc$topic)
+
+pred<-factor(pred,labels=c("Law and Crime","Housing"))
+actual<-factor(dfmat_matched$topic,labels=c("Law and Crime","Housing"))
+
+t1<-table(pred,actual)
+
+
+```
+
+### Evaluating a Model
+
+Now, how do we quantify this?  Basically, we have 2 kinds of errors. We can be confused in two ways. We can underidentify a topic or overidentify it. 
+
+
+
+```{r}
+confusionMatrix(t1)
+```
+
+P: Positives: 1818
+N: Negatives: 1259
+TP: True Positives: 993
+TN: True Negatives: 1723
+FP: False Positives: 336
+FN: False Negatives: 95
+
+
+### Accuracy
+
+A good overall score, like Krippendorff's Alpha
+
+TP+TN/P+N
+
+
+```{r}
+(1723+993)/(1723+336+95+993)
+```
+
+Out of sample:
+
+```{r}
+
+
+logi3 <- cv.glmnet(x = dfmat_training,
+                   y = as.integer(dfmat_training$topic),
+                   family = "binomial",  alpha = .54,
+                   nfold = 5)
+
+dfmat_matched <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+
+actual_class <- as.integer(dfmat_matched$topic)
+
+predicted_class <- predict(logi3, dfmat_matched, type = "class")
+
+
+table(predicted_class)
+
+tab_class <- table(actual_class, predicted_class)
+
+confusionMatrix(tab_class, mode = "everything")
+```
+
+
+
+
+
+
+
+## Naive Bayes
+
+Naive Bayes is called naive bayes because it applies Bayes rule of prior density*new data = posterior density on a bag of words. In contrast ot logistic regression, which is a discriminative model, NB is a generative textmodel (it builds up a concept of the category).
+
+
+### Train the model 
+
+Fitting the naive bayes model is easy: we tell the computer on which dfm it should learn, based on which label variable
+
+
+```{r}
+library(quanteda.textmodels)
+
+
+tmod_nb <- textmodel_nb(dfmat_training, docvars(dfmat_training,"topic"))
+
+
+```
+
+Basically, the model learns which words come up more often in a specific category. Based on these words, it learns how a specific word is more likely to occur in a specific category.  
+
+
+Now, which words are indicative of a specific issue, such as environment.
+
+```{r}
+scores<-as.data.frame(t(tmod_nb$param))
+
+scores<-scores[order(scores$`12`,decreasing = T),]
+
+rownames(scores)[1:20]
+
+```
+```{r}
+
+scores<-scores[order(scores$`14`,decreasing = T),]
+rownames(scores)[1:20]
+
+```
+
+## Predicting 
+
+Well this already looks good...now let's use this model to predict the categories of the REST of the data we didn't use, and check how this relates to the real categories. 
+
+To do so, we need to use only those features which are learned from the training data and get weights -> all other terms are not the same and therefore can't be evaluated.
+
+```{r}
+dfmat_matched <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+
+actual_class <- dfmat_matched$topic
+
+
+```
+
+We use the predict function to apply this model to the other dfm.
+
+```{r}
+predicted_class <- predict(tmod_nb, newdata = dfmat_matched)
+
+
+
+
+
+```
+
+
+Now, we basically create a table that compares predictions with reality. We use the caret package
+
+```{r}
+
+tab_class <- table(as.factor(actual_class), as.factor(predicted_class))
+confusionMatrix(tab_class)
+
+```
+
+## Multiclass 
+
+While Logistic Regression only allows for binary data, Naive Bayes can give us a nice overview over all categories. Here it becomes less interesting what the overall score of a model is, but which classes are easily identified.
+
+
+
+```{r}
+id_train <- sample(1:nrow(df), round(nrow(df)/4,0), replace = FALSE)
+
+docvars(ft,"id_numeric") <- 1:ndoc(ft)
+
+# get training set
+dfmat_training <- dfm(tokens_subset(ft, id_numeric %in% id_train))
+
+# get test set 
+dfmat_test <- dfm(tokens_subset(ft, !id_numeric %in% id_train))
+
+tmod_nb <- textmodel_nb(dfmat_training, docvars(dfmat_training,"cat"))
+
+dfmat_matched <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+
+actual_class <- factor(dfmat_matched$cat)
+
+predicted_class <- predict(tmod_nb, newdata = dfmat_matched)
+
+t1<-table(actual_class,predicted_class)
+confusionMatrix(t1)
+```
+
+How can we interpret this? We have an accuracy of .54. That looks low, compared to the binary classification, but of course the task at hand is much more difficult. The probability of a random guess between two balanced categories is .5. The probability of a random guess among 22 is <.05. To counter this problem there are several interesting metrics. First, we have the no-information-rate which shows that based on the relative prevalence (not all categories have the same real occurrence), and the individual RECALL, PRECISION and F1 Scores.
+
+
+As we can see here, the no-information-rate is only .12, so the model obviously is informative. 
+
+
+
+But this is not that helpful, especially if our data is not completely balanced. Aside from the global accuracy, you can also report values per category, which is helpful if you have unbalanced data. Let's take a look if we talk about a classifier that allows more than one category: Naive bayes.
+
+
+
+
+Positive: those that are actually of the category
+Predicted Positives: those that are predicted as of category
+True Positives: Category and Prediction = Positives.
+
+For category housing, we see these values (it is the 13th column of the confusion matrix)
+
+```{r}
+
+TP<-t1[13,13]
+PP<-t1[,13]
+P<-t1[13,]
+
+```
+
+### Recall
+How good is the classifier in correctly identifying true values?
+
+Does the model forget documents which belong in a category?
+
+Recall is the share of correctly identfied positives, so TP/P
+```{r}
+
+TP/sum(P)
+
+```
+
+ 
+
+
+### Precision
+
+How good is the classifier in its selectivity Does it just consider everything part of the category? Does it put documents into a category that do not belong there?
+
+
+```{r}
+
+TP/sum(PP)
+
+```
+
+
+
+### F1 Score
+
+A combination of these two allows for some sort of category based accuracy, the F1 score which is often reported.
+
+```{r}
+2*TP/(sum(PP)+sum(P))
+```
+
+
+
+```{r}
+table(actual_class)
+```
+
+
+Now let's look at the rarest class in the data: culture with only 264 observations.
+
+
+We compute the F1 score...
+```{r}
+TP<-t1[3,3]
+PP<-t1[,3]
+P<-t1[3,]
+2*TP/(sum(PP)+sum(P))
+
+```
+which is truly terrible. However, let's do a binary classifier on this. 
+
+
+
+
+
+
+```{r}
+tmod_nb <- textmodel_nb(dfmat_training, docvars(dfmat_training,"cat")=="Culture")
+
+dfmat_matched <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+
+actual_class <- factor(dfmat_matched$cat=="Culture")
+
+predicted_class <- predict(tmod_nb, newdata = dfmat_matched)
+
+t1<-table(actual_class,predicted_class)
+confusionMatrix(t1)
+```
+
+
+First of all, we see that while the accuracy is awesome, the model really didn't learn anything. Here we can see a typical problem of the accuracy score. It is very high because there are very few categories. Again, since the category is comparatively rare, just guessing NO in 95 percent of the time is a very good way to get an accuracy >.95. However, this is not telling uns anything about how good the model is to predict. 
+
+The NER is BETTER than the model, so guessing would be preferable. The better way to evaluate this is to compute the F1 score again.
+
+
+
+```{r}
+TP<-t1[2,2]
+PP<-t1[,2]
+P<-t1[2,]
+2*TP/(sum(PP)+sum(P))
+
+```
+
+
+As we can see, the F1 is even worse than in the bigger model. Why is that the case? In the big model, it learns to distribute terms that are specific for categories over these categories, so if there are terms mixed into culture but relate to other areas, they are at least split over categories. Here, we pool everything into a common category, which makes the model extremely confident about the negative category. So as you can see, it is very important to make sure you model is as balanced as possible, not just because you might draw false conclusions based on Accuracy metrics, but also because the model will learn differently with unbalanced data. 
+
+
+
+
+## Other simple Classifiers
+
+
+
+Support Vector Machines...
+
+
+
+```{r}
+sv1<-textmodel_svm(dfmat_training,y=docvars(dfmat_training,"cat"))
+```
+
+
+```{r}
+
+
+actual_class <- factor(dfmat_matched$cat)
+
+predicted_class <- predict(sv1, newdata = dfmat_matched)
+
+t1<-table(actual_class,predicted_class)
+confusionMatrix(t1)
+```
+
+
+### Neural Nets 
+
+
+These models already work quite well in doing what they are supposed to, but of course they have been improved over the years, most significantly through the development of artifical neural networks: the idea to simulate the learning process of humans, in a very abstract manner.
+
+To do this, the models use not just logistic regressions, but dozens of these so called "neurons" that transform a given input into an output (like LR). 
+
+There are several ways to implement this, but the dominant implementation is the python library tensorflow and the keras API. It allows building your own network with a number of building blocks.
+
+
+
+```{r}
+library(keras)
+
+```
+
+First we build a training set compatible with keras. To do this we need to turn the DFM into a regular matrix (a tensor) and do the same with the dependent variable. To do this, we need to encode each variable as a set of dummies, so called one-hot encoding.
+
+```{r}
+
+y<-as.factor(docvars(dfc,"topic"))
+y2 <- to_categorical(as.integer(y) - 1, num_classes = nlevels(y))
+
+x_mat<-convert(dfc,to="matrix")
+id_train <- sample(c(T,T,T,F),nrow(x_mat),replace = T)
+x_test<-x_mat[!id_train,]
+y_test <- y2[!id_train,]
+
+x_train<-x_mat[id_train,]
+y_train <- y2[id_train,]
+
+
+dim(x_train)
+dim(y_train)
+class(y_train)
+```
+
+
+After we constructed the data, we will built a neural network. So how can we imagine this? You can think of this as a number of logistic regressions that all forward their results to the next logistic regression. These regressions are call NEURONS. They are ordered hierarically
+into LAYERS.
+
+
+We differentiate between 3 types of layers:
+
+Input - needs to have the dimension of your input (number of features)
+
+Hidden - the "throughput" that is not actually data nor label, but the weights that are updated
+
+Output - the result, which takes the last layer and turns it into a prediction. It has to have the shape of your Label matrix.
+
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics('./model.png')
+```
+
+The data is passed from input via hidden to output und activation functions that transform weights in an input for the next layer. Mostly these are functions that turn weights in one or zero. Relu, Softmax, tanh are all these types of functions with small tweaks depending on task. 
+
+The more layers you have, the more computationally intensive your model becomes, but it also stores more weights that might be relevant for your classification. This ability also makes overfitting VERY easy. Often you will also include a dropout layer that keeps the model from overfitting by randomly killing weights.
+
+
+
+```{r}
+model <- keras_model_sequential() %>%
+        layer_dense(units = 512, input_shape = ncol(x_train), activation = "relu") %>%
+        layer_dropout(rate = .2) %>%
+        layer_dense(units =nlevels(y), activation = "softmax")
+```
+
+
+```{r}
+summary(model)
+
+```
+
+
+### Model Training   
+ 
+
+After build how the model passes and stores weights, we define how it will learn. We use the error of categorical crossentropy, since we have a classifaction problem.
+
+
+We use the adam optimizer, which is not strictly gradient descent, but faster (these questions are of concern of engineers>scientists)
+
+
+
+```{r}
+model %>% compile(
+     loss = 'categorical_crossentropy',
+     optimizer = 'adam',
+     metrics = 'categorical_accuracy'
+ )
+```
+
+
+So how does the model work now? It passes weights from input to output, checks how well it did, and computes the loss. Now, it will update the weights, like LR does with partial derivatives. But in the case of the neural network, this is not trivial, as the individual nodes all have their own weights. So instead of normal gradient descent, the output node checks how well it did and sends the results back to the first previous layer, that adapts it weights and then sends the loss back to its own previous layers. This process is called BACKPROPAGATION. So the model sends the feedback through all layers back to the first and updates weights sequentially.
+
+After we defined the model and its learning process we can start the training of the network. We pass it training data and the validation data and start running. One more thing is for debate: how long and fast do you want to train the model? We control the batch size and the epochs of a model. The batch size tells us after how many observations the model will check the loss - smaller batch size means more weight updating. The epochs tell you how often the model will go over the whole dataset. 
+
+If you train the model to short, it will not find the optimum. If it trains too long, you will overfit. 
+
+
+```{r}
+
+hist <- model %>%
+  fit(
+    x_train,
+    y_train,
+    validation_data = list(x_test, y_test),
+    verbose=1,
+    epochs=3,
+    batch_size=10
+  )
+```
+We can already see that the validation accuracy is about 7 points > the naive classifiers. So training the bigger model makes sense. 
+
+```{r}
+pred<-predict(model,x=x_test)
+#pred2<-predict(model,x=x_test)
+
+
+plot(hist)
+dim(pred)
+pred1<-max.col(pred)
+ref<-max.col(y_test)
+t1<-table(as.factor(ref),as.factor(pred1))
+confusionMatrix(t1)
+
+```
+
+But to this point, we only added more complex ways of storing knowledge to the model. It still works with ngrams!
+This still does not solve our problems about context and out-of-vocabulary problems. The question is, how can we fix thid?
+
+
+
+Out-of-vocabulary
+
+Meaning 
+
+
+
+
+```{r}
+batch_size <- 32
+embedding_dims <- 100
+filters <- 64
+kernel_size <- 3
+hidden_dims <- 50
+epochs <- 5
+```
+
+
+
+#### Including Word Embeddings
+
+
+So what if we want to include word embeddings (see session two), to improve downstream performance, by reducing out-of-vocab problems. Instead of using the dfm, we can use a sequence based model. To do this, we have to go one step back, as the dfm removed the relationships between the tokens. So instead, we will work with the tokens object and turn them into sequences of tokens. 
+
+
+```{r}
+library(quanteda.classifiers)
+
+
+ft<-tokens_subset(ft,ft$cat%in%c("Law and Crime","Housing"))
+
+x_mat <- tokens2sequences(ft, maxsenlen = 100, keepn = dfc$nfeatures)
+
+y<-as.factor(docvars(ft,"topic"))
+y2 <- to_categorical(as.integer(y) - 1, num_classes = nlevels(y))
+
+
+id_train <- sample(c(T,T,T,F),nrow(x_mat$matrix),replace = T)
+x_test<-x_mat$matrix[!id_train,]
+y_test <- y2[!id_train,]
+
+x_train<-x_mat$matrix[id_train,]
+y_train <- y2[id_train,]
+words<-x_mat$nfeatures
+
+dim(x_train)
+dim(y_train)
+class(y_train)
+
+```
+
+
+After we created a sequence matrix, we ncan no rebuild the model to include word embeddings. Instead of the regular model, we now don't pass the data directly to the classification layer, but instead include a layer that transforms word sequences into embeddings "on the fly". It then uses the vectorized forms in the next step of the analysis. To store the data we use an lstm (long-short-term-memory). 
+
+Choosing the exact specification of an architecture is a science of its own, I go with the defaults most of the time)
+```{r}
+ 
+model <- keras_model_sequential()
+
+model %>%
+        layer_embedding(input_dim = words + 1, output_dim = 300,
+                        input_length = 100) %>%
+        layer_dropout(rate = .2)
+
+ model %>%
+            layer_conv_1d(filters = 48, kernel_size = 5,
+                          activation = "relu") %>%
+            layer_max_pooling_1d(pool_size = 4) %>%
+            layer_dropout(rate = .4)
+
+model %>%
+        bidirectional(layer_lstm(units = 128, dropout = .3,
+                                 recurrent_dropout = .3)) %>%
+        layer_dense(units = nlevels(y), activation = "softmax")
+
+model %>%  compile(
+    loss = "categorical_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy"
+  )
+```
+
+Then, we will run the model. This is computationally intensive, so it makes sense to limit the number of iterations (epochs). An epoch describes how often the model compares the results with the validation set basically. 
+
+
+
+
+```{r}
+hist <- model %>%
+  fit(
+    x_train,
+    y_train,
+    batch_size = batch_size,
+    epochs = 2,
+    validation_data = list(x_test, y_test),verbose=1
+  )
+```
+
+Afterwards, we will predict to get more detailed results in form of a confusion matrix. 
+```{r}
+pred<-predict(model,x=x_test)
+#pred2<-predict(model,x=x_test)
+
+
+plot(hist)
+dim(pred)
+pred1<-max.col(pred)
+ref<-max.col(y_test)
+t1<-table(as.factor(ref),as.factor(pred1))
+confusionMatrix(t1)
+
+```
+
+
+## Pretrained embeddings
+
+
+
+So we have seen how word embeddings in general can improve your classification tasks. However, depending on your data, this might be less helpful than it seems. There are two limiting factors:
+
+first, if you have little training data and high heterogeneity (many different words, that differ between test and training), you might not get a good represenation of your terms in your local embedding
+
+second, if your texts are very short, you will suffer the same problem as topic models: to few words are inherently connected to one another (although this is definitly less of a problem than with document level analysis.).
+
+If you are not sure whether your data is representative of the semantics, you might consider using pretrained embeddings. As we talked about in session 2, word embeddings "travel" well, as they allow mapping your labeled text corpus into a common semantic space. 
+
+Today, we will use two pretrained GLOVE embeddings, as discussed in session2: one trained by the University of Stanford which is supposed to be representative for the general english language, and one that is particular for the case we are looking at, trained on the speech corpus of the British House of Commons. 
+
+
+The relative advantages and disadvantages of this approach depend on the exact nature of your classification: how particular is your corpus, how many special political terms really matter, and how stable need your embeddings to be. Is it better to have an error in how your model learns the word party or how it learns the word queen?
+
+
+We will start with the GLOVE corpus for the english language. It was trained on Wikipedia and is therefore good for generally understandable language. We first download the data.
+
+
+```{r}
+# Download Glove vectors if necessary
+if (!file.exists('glove.6B.zip')) {
+  download.file('https://nlp.stanford.edu/data/glove.6B.zip',destfile = 'glove.6B.zip')
+  unzip('glove.6B.zip')
+}
+```
+
+and turn it into a dataframe we can work with.
+```{r}
+vectors = data.table::fread('glove.6B.300d.txt', data.table = F,  encoding = 'UTF-8') 
+colnames(vectors) = c('word',paste('dim',1:300,sep = '_'))
+
+```
+
+
+We then tokenize the text, and turn it into sequences, much like the local training approach.
+
+```{r}
+max_words = 6000
+maxlen = 60
+dim_size = 300
+
+word_seqs = text_tokenizer(num_words = max_words) %>%
+  fit_text_tokenizer(df$`texts(uk_corp)`)
+
+x_train = texts_to_sequences(word_seqs,df$`texts(uk_corp)`) %>%
+  pad_sequences( maxlen = maxlen)
+
+y<-as.factor(df$topic)
+y_train <- to_categorical(as.integer(y) - 1, num_classes = nlevels(y))
+
+```
+
+However, we make one important modification: we use the new vocabulary and merge it the embeddings.
+
+```{r}
+
+# unlist word indices
+word_indices = unlist(word_seqs$word_index)
+
+# then place them into data.frame 
+dic = data.frame(word = names(word_indices), key = word_indices, stringsAsFactors = FALSE) %>%
+  arrange(key) %>% .[1:max_words,]
+
+dim(dic)
+#dic<-x_mat$features
+# vermutlich ist das object nicht 0-indesx
+names(dic)<-c("word","key","freq")
+
+####!
+
+dim(dic)
+# join the words with GloVe vectors and
+# if word does not exist in GloVe, then fill NA's with 0
+word_embeds = dic[,1:2]  %>% left_join(vectors) %>% .[,3:302] %>% replace(., is.na(.), 0) %>% as.matrix()
+
+nrow(word_embeds[rowSums(word_embeds)==0,])
+
+dim(word_embeds)
+# Use Keras Functional API 
+
+```
+
+
+
+
+Now, we can build the model in the same way before - with one major change: instead of starting from a random initialization, as we would if the trained the embeddings from scratch, we import a "prior" of weights into the embedding layer. We therefore give it a starting point. If you like, you can set the option "trainable=F", to make sure it keeps the weights.
+
+
+```{r}
+
+input = layer_input(shape = list(maxlen), name = "input")
+
+
+model = input %>%
+  layer_embedding(input_dim = nrow(word_embeds), output_dim = dim_size, input_length = maxlen, weights = list(word_embeds), trainable = T) %>%
+  layer_spatial_dropout_1d(rate = 0.2 ) %>%
+  bidirectional(
+    layer_gru(units = 80, return_sequences = TRUE) 
+  )
+max_pool = model %>% layer_global_max_pooling_1d()
+ave_pool = model %>% layer_global_average_pooling_1d()
+
+output = layer_concatenate(list(ave_pool, max_pool)) %>%
+  layer_dense(units = 2, activation = "sigmoid")
+
+model = keras_model(input, output)
+
+# instead of accuracy we can use "AUC" metrics from "tensorflow.keras"
+model %>% compile(
+  optimizer = "adam",
+  loss = "binary_crossentropy",
+  metrics = "accuracy"
+)
+
+
+```
+Then, we just run the model like before. 
+
+```{r}
+
+
+history = model %>% keras::fit(
+  x_train, y_train,
+  epochs = 8,
+  batch_size = 32,
+  validation_split = 0.2,verbose=1
+)
+```
+
+
+So we see that the general language is okay-ish, but not better than local embeddings. But what about word embbedings from the same context, but with much more text? Can we make use of other language from the same time frame?
+
+```{r}
+
+load("../../session_2/scripts/speech_embeddings.rdata")
+
+dim(uk_word_vectors)
+dim(vectors)
+
+uk_word_vectors<-as.data.frame(uk_word_vectors)
+uk_word_vectors$word<-rownames(uk_word_vectors)
+
+names(uk_word_vectors)[1:300]<-names(vectors)[2:301]
+vectors<-uk_word_vectors
+```
+
+We replace the vectors now with our own embeddings! The rest of the code is exactly the same!
+
+
+```{r}
+
+max_words = 10000
+maxlen = 60
+dim_size = 300
+
+word_seqs = text_tokenizer(num_words = max_words) %>%
+  fit_text_tokenizer(df$`texts(uk_corp)`)
+
+x_train = texts_to_sequences(word_seqs,df$`texts(uk_corp)`) %>%
+  pad_sequences( maxlen = maxlen)
+
+
+y<-as.factor(df$topic)
+y_train <- to_categorical(as.integer(y) - 1, num_classes = nlevels(y))
+
+# unlist word indices
+word_indices = unlist(word_seqs$word_index)
+
+# then place them into data.frame 
+dic = data.frame(word = names(word_indices), key = word_indices, stringsAsFactors = FALSE) %>%
+  arrange(key) %>% .[1:max_words,]
+
+# join the words with GloVe vectors and
+# if word does not exist in GloVe, then fill NA's with 0
+word_embeds = dic[,1:2]  %>% left_join(vectors) %>% .[,3:302] %>% replace(., is.na(.), 0) %>% as.matrix()
+
+
+
+
+
+dim(word_embeds)
+# Use Keras Functional API 
+input = layer_input(shape = list(maxlen), name = "input")
+
+
+model = input %>%
+  layer_embedding(input_dim = nrow(word_embeds), output_dim = dim_size, input_length = maxlen, 
+                  # put weights into list and do not allow training
+                  weights = list(word_embeds), trainable = T) %>%
+  layer_spatial_dropout_1d(rate = 0.2 ) %>%
+  bidirectional(
+    layer_gru(units = 80, return_sequences = TRUE) 
+  )
+max_pool = model %>% layer_global_max_pooling_1d()
+ave_pool = model %>% layer_global_average_pooling_1d()
+
+output = layer_concatenate(list(ave_pool, max_pool)) %>%
+  layer_dense(units = 2, activation = "sigmoid")
+
+model = keras_model(input, output)
+
+# instead of accuracy we can use "AUC" metrics from "tensorflow.keras"
+model %>% compile(
+  optimizer = "adam",
+  loss = "binary_crossentropy",
+  metrics = "accuracy"
+)
+
+history = model %>% keras::fit(
+  x_train, y_train,
+  epochs = 8,
+  batch_size = 32,
+  validation_split = 0.2,verbose=1
+)
+```
+
