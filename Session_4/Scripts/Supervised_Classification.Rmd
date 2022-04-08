@@ -36,6 +36,7 @@ if(!require(quanteda.textmodels)){install.packages("quanteda.textmodels")}
 if(!require(keras)){install.packages("keras")}
 if(!require(quanteda)){install.packages("quanteda")}
 if(!require(quanteda.classifiers)){devtools::install_github("quanteda/quanteda.classifiers")}
+library(quanteda.textmodels)
 
 ```
 
@@ -71,6 +72,7 @@ ft<-tokens_select(ft,pattern=stopwords("en"),selection='remove')
 
 dfc2<-dfm(ft)
 
+ft<-tokens_subset(ft,ft$cat%in%c("Law and Crime","Housing"))
 
 dfc<-dfm_subset(dfc2,dfc$cat%in%c("Law and Crime","Housing"))
 ```
@@ -161,27 +163,34 @@ As I mentioned above, the process of fitting a model is find a weight to minimiz
 
 
 
-
-
-
-
-
-So let us train the model: first, 
-
 ```{r}
+library(quanteda.textmodels)
 
-logi <- cv.glmnet(x = dfmat_training,
-                   y = as.integer(dfmat_training$topic),
-                   family= "binomial")
+  lr1<-textmodel_lr(dfmat_training,y=as.integer(dfmat_training$topic))
+  
 
 ```
+
+
+```{r}
+pred <- predict(lr1, dfmat_training,type="class")
+
+
+t1<-table(pred,dfmat_training$topic)
+
+confusionMatrix(t1)$overall[1]
+
+
+```
+
+
 
 
 So let's see what the model decided upon. What FEATURES are indicative of the housing class?
 
 ```{r}
 index_best <- which(logi$lambda == logi$lambda.min)
-beta <- logi$glmnet.fit$beta[, index_best]
+beta <- lr1$lrfitted$glmnet.fit$beta[, index_best]
 head(sort(beta, decreasing = TRUE), 40)
 
 ```
@@ -190,7 +199,7 @@ And which are indicative of law and crime?
 
 ```{r}
 index_best <- which(logi$lambda == logi$lambda.min)
-beta <- logi$glmnet.fit$beta[, index_best]
+beta <- lr1$lrfitted$glmnet.fit$beta[, index_best]
 head(sort(beta, decreasing=F), 40)
 
 ```
@@ -201,13 +210,12 @@ That already looks good! If this were a topic model, we would be happy. Let's se
 After we TRAIN a model, we want to find out how it performs: we next PREDICT the classes and check how well the model performed.
 
 ```{r}
-pred <- predict(logi, dfmat_training,type="class")
+pred <- predict(lr1, dfmat_training,type="class")
 
 
 t1<-table(pred,dfmat_training$topic)
 
-confusionMatrix(t1)$overall[1]
-
+t1
 ```
 
 Woah nice, problem solved, let's go out there!
@@ -230,10 +238,8 @@ To do so, we have to make sure that the new data has the same features as the tr
 
 dfmat_matched <- dfm_match(dfmat_test, features = featnames(dfmat_training))
 
-pred <- predict(logi, dfmat_matched, type = "class")
+pred <- predict(lr1$lrfitted, dfmat_matched, type = "class")
 
-
-cbind(dfc$cat,dfc$topic)
 
 pred<-factor(pred,labels=c("Law and Crime","Housing"))
 actual<-factor(dfmat_matched$topic,labels=c("Law and Crime","Housing"))
@@ -947,7 +953,6 @@ So we see that the general language is okay-ish, but not better than local embed
 load("../../session_2/scripts/speech_embeddings.rdata")
 
 dim(uk_word_vectors)
-dim(vectors)
 
 uk_word_vectors<-as.data.frame(uk_word_vectors)
 uk_word_vectors$word<-rownames(uk_word_vectors)
