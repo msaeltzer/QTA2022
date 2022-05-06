@@ -1,0 +1,196 @@
+---
+title: 'Session 5: Concepts and Text'
+author: "Marius Sältzer"
+date: "5 5 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Back to Basics
+
+In the previous sessions, we have talked intensively about the techniques of text analysis. This session and the next will be devoted to the application to individual research questions, and how to do meaningful text analysis in practice. 
+
+It will be structured in an interactive process, guided by this script.
+
+There are three problems we have when applying techniques: we typically want to answer questions rooted in theory. Can we measure what we want to measure using this text analysis? This step is called concept specification. Second, how does the concept materialize in text? Does the medium I extract it from matter? Third, we are often faced with limited ressources both in terms of textual content and meaningful structure: how can we 1) adapt existing measures in 2) existing texts and 3) make sure we can answer our questions? 
+
+## Finding Concepts and Measures
+
+Research questions in social sciences are often depending on causal relationships. To test these, we need clearly specified variables that correlate to the concepts we actually want to measure. As we all know from research design courses, testing hypotheses is not trivial. It becomes even more problematic if the measures we use are not actually related to our theoretical concepts. The focus of this course is to gain certainty in the use of text analysis to appropriatly measure them.
+
+### Observable Implications
+
+To test hypotheses, we must clearly denote our expectations. We must a priori define which observations would indicate support for our hypotheses. We therefore need to explain what change we would expect. The "thing" changing is called a concept. Examples could be "migration emphasis", "technological change", "monetary hawkishness", "populism" etc.  
+
+Concepts are made up of three components: the term, the intension, and the extension. Intension refers to all attributes the concept has, while extension describes the boundaries to other concepts. 
+
+So for example populism as defined by Cas Mudde:
+
+Populism (term) is a "thin" ideology, the combination of anti-elitism and people-centrism (intension). It has to be differentiated from "thick" ideology like conservatism or socialism, which make policy proposals (extension).
+
+### Task 1
+Write up your hypothesis:
+
+
+Write up a definition of your concept:
+Term:
+Intension:
+Extension:
+
+If now you find out that you don't have a concept, you can consult which is helpul (not just for political science)
+
+*Wonka, Arndt. "Concept specification in political science research." Research Design in Political Science. Palgrave Macmillan, London, 2007. 41-61.*
+
+He differentiates 6 Rules:
+
+1. Search the literature for specifications of the concepts you will use in your research project! 
+
+2. Explicate clearly and exhaustively the attributes you ascribe to the concept(s) used in your theoretical framework! 
+
+3. Think hard about how the attributes of the concept relate to each other – and to the concept’s overall meaning!
+
+4. Try to keep your concept’s level of abstraction low (if it is theoretically reasonable)!
+
+5. Relate the concept’s attributes to the units of analysis you empirically investigate! 
+
+6. Be aware that in empirical research any concept eventually needs to be operationalized and measured!
+
+
+## Building Categories
+
+After we found a concept, we need to find a dimension on which to compare things. A concept might be present or not, or it might refer to a continuum. This is a very important question, as it determines how it is expressed both in text and in our measurement. Often these things are undetermined: If we are interested in incivility, we can either see it as present or not, or as a dimension like sentiment between positive and negative. 
+
+This might seem obvious in many cases, but depends on the definition in many cases. So for example, education can be measured as the highest degree achieved, by numbers of years spent in education etc. 
+
+
+For your concept, answer these questions:
+
+## Task 2:
+
+1) What alternative states can a text take in terms of your concept? 
+2) Does your concept have a natural opposite?
+3) Is it discrete or continuous?
+
+
+
+### Exclusive and Complete
+
+A third question that is of great importance to your measurement is whether it makes logical sense. To define the extension, we need to define borders. There are two important criteria to make sure a concept makes sense in that regard: is it exclusive, and is it complete. Completeness means that every possible case you might find can be described by your categories. So again for our education example, did you list all possible degrees, or categories in which each of them fit. Second is the question of exclusiveness: can each case be given exactly one category, or can they overlap? This is important for text analysis, as it poses several individual classification problems, if not.  
+
+### Task 3
+
+Define the extension of your concept: is it complete and exclusive? 
+
+## Measurement in Text
+
+As I argued above, text analysis is a specific method to derive variables that are of interest to the research question. So can we see a change in concept based on our hypotheses? Does the case (text) vary in the category or along the continuum?
+
+If we use text variables, this change is limited to the which words are used and in which order. Text move along a dimension of similarity. If our concept is specified correctly, the endpoints of these dimensions are the conceptual endpoints.  
+
+The methods we introduced so far, unsupervised and supervised learning vary in how we determine these endpoints. In supervised learning, we teach the model which cases define the endpoints of the dimension. In unsupervised learning, we hope that the natural dimension that emerges relates to our research question. 
+
+In both cases, we need to validate whether the concept relevant to our research question relates to the concept we measure.
+
+### Task 4: Finding Endpoints
+
+To find our whether a measure works or not, we therefore need it to be able to find the right dimension.
+
+As we noted before, methods of textual analysis, while being categorical or continuous on the surface, are always continuous to some degree, but can be transformed into categories again.
+
+Please develop examples of the endpoints of your concept, that should always be able to be classified. Show them to your colleagues.
+
+
+### Internet Search
+
+Now, that you have a better understanding of WHAT you want to measure, it is time to apply this on real world text. I asked you to all bring your corpora. The next section will deal with the text. 
+
+
+### Taming Text
+
+(Input Talk in PowerPoint)
+
+
+## Contextualize your Corpus
+
+
+1) Describe the typical AUTHOR of your text
+
+2) Describe the likely INTENT
+
+3) Describe the typical AUDIENCE
+
+4) Describe the relative Position in the general LANGUAGE
+
+5) Describe the RULES that govern the production of this corpus
+
+  a) Limits to issue
+  b) Limits to length
+  c) Limits to author
+  
+6) What is the approriate level of analysis? Are there structural effects in the data?
+
+
+7) What could be problems given your research question?
+
+8) What could be solutions?
+
+
+### Remix
+
+Now, I want you to reshuffle your groups, so every new group gets one representative from each old group. Communicate and present your different text forms and specifics. 
+
+
+1) Make a list of central differences in your text forms
+2) Discuss in the classroom, if you all came to the same conclusions.
+
+
+After this, I want you to reflect on your own RQ, given the different corpora. Is your corpus the best way to answer your question? What do I need to 
+
+
+# Task 6
+
+After your clearly defined what you want to measure, are there other papers that deal with a similar problem? Did they operatonalize the concept? Did they already code text based on it? Try to find related datasets and explain:
+
+1) Does this fit your research question?
+2) What are conceptual differences?
+3) How would this affect your observable implications?
+
+
+
+As a last question: if you found another dataset that measures your concept, how does the corpus differ from your own? 
+
+
+1) Describe the typical AUTHOR of to your text in comparison! 
+
+2) Describe the likely INTENT in comparison to your text! 
+
+3) Describe the typical AUDIENCE in comparison to your text! 
+
+4) Describe the relative Position in the general LANGUAGE in comparison to your text! 
+
+5) Describe the RULES that govern the production of this corpus in comparison to your text! 
+
+  a) Limits to issue
+  b) Limits to length
+  c) Limits to author
+  
+6) What is the approriate level of analysis? Are there structural effects in the data? How can this be transferred to another corpus?
+
+
+7) What could be problems given your research question?
+
+8) What could be solutions?
+
+
+
+
+
+
+
+
+
+
+
