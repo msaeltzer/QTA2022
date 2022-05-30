@@ -1,0 +1,273 @@
+---
+title: "Working with what You Got"
+author: "Marius Saeltzer"
+date: "28 5 2022"
+output: html_document
+output:
+    ioslides_presentation:
+    incremental: false
+    widescreen: false 
+    smaller: false 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+## Last Time
+
+Last time we looked at your projects and we identified some things you could use for your projects. 
+
+```{r,,message=FALSE,warning=F}
+
+if(!require(quanteda)){install.packages("quanteda")}
+if(!require(text2vec)){install.packages("text2vec")}
+if(!require(seededlda)){install.packages("seededlda")}
+if(!require(vegan)){install.packages("vegan")}
+if(!require(stm)){install.packages("stm")}
+if(!require(quanteda.textmodels)){install.packages("quanteda.textmodels")}
+if(!require(quanteda.textplots)){install.packages("quanteda.textplots")}
+#devtools::install_github("kbenoit/quanteda.dictionaries") 
+
+library(quanteda.dictionaries)
+
+```
+
+The common denominator of almost any PhD Student project is a lack of ressources and the search of a good method to answer your questions. Supervised Learning usually requires the opposite: a lot of hand-coded data. Today I will present two methods to bend existing approaches to your questions:
+
+1) Semi-supervised Learning
+
+The most low-cost approaches in text analysis are typically dictionary approaches and unsupervised learning. I present two new methods of semi-supervised learning, a mixture mitigating their disadvantages: false negatives often found in dictionary analysis and conceptual stretching in unsupervised methods.
+
+
+2) Transformer Models
+
+Oftentimes, the ressources to code a low number of labels exist, but not enough to train regular machine learning models. Transformer models are the latest solution for this using large, pre-trained and complex models to make use of unsupervised embeddings to transfer information from other language and domains. They "fine-tune" on a limited amount of training data. 
+
+
+Today we will start with semisupervised in R and then move to a colab notebook in python for transformer models. 
+
+
+
+
+
+
+
+
+
+
+
+## Semisupervised Methods
+
+The common problem of all approaches of unsupervised learning is that you don't know if the extracted concept relates to your research question and the concept you want to operationalize. In the end, it is based on the hope that the dimension you are interested in is also the dimension that is most important in the data. 
+
+How to deal with this: 
+
+1) Use semisupervised methods: If you have a clear idea what dimension you want to identify, it can help to "nudge" your models using seeded topic models or dictionary seedwords in Latent Semantic Scaling .
+  
+  
+2) Validation: Make sure you have transparent expectations and find ways to make sense of your data. This validation should be based on criteria that relate to your question, semantic coherence and if possible, a coded validation set. 
+
+
+
+
+## Import Data 
+
+
+To give you an idea about how to apply these semisupervised methods, we try it out on a "well-defined" problem: sentiment. As we already looked at in the first session, sentiment has been analyzed for ages and went through the whole development from dictionaries to deep learning. There are validated dictionaries, classification model and even off the shelf trained BERT models. 
+
+
+As an example, we will go from dictionaries through mulitlingual learning with simple dictionaries.
+
+
+
+Import a pretrained data set
+```{r}
+data<-read.csv("../data/reviews.csv",encoding="UTF-8")
+
+
+save(data,file="sentiment.rdata")
+```
+
+
+anpassen!
+```{r}
+load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_4/Data/sentiment.rdata"))
+
+```
+
+```{r}
+
+corp<-corpus(data$text,docvars 
+           
+           =data)
+```
+
+
+
+Basic Classifier as reference
+
+```{r}
+lsd<-quanteda::data_dictionary_LSD2015
+length(lsd$negative)
+```
+
+```{r} 
+
+output_lsd <- liwcalike(corp, 
+                       dictionary = lsd)
+```
+
+```{r}
+table(data$sentiment)
+```
+
+
+
+```{r}
+data$sent<-output_lsd["positive"]-output_lsd["negative"]
+data$sent_c<-ifelse(data$sent>0,1,0)
+data$sent<-ifelse(data$sent<=0,-1,data$sent_c)
+table(data$sent)
+
+data$sent_c<-ifelse(data$sent_c==1,"pos","neg")
+
+```
+```{r}
+caret::confusionMatrix(table(data$sentiment,data$sent_c))
+```
+
+
+
+```{r}
+ft<-tokens(corpus(data$text,docvars=data))
+
+id_train <- sample(1:nrow(data), round(nrow(data)/4,0), replace = FALSE)
+# get training set
+docvars(ft,"id_numeric") <- 1:ndoc(ft)
+
+dfmat_training <- dfm(tokens_subset(ft, id_numeric %in% id_train))
+
+# get test set 
+dfmat_test <- dfm(tokens_subset(ft, !id_numeric %in% id_train))
+docvars(ft,"id_numeric") <- 1:ndoc(ft)
+
+# get training set
+dfmat_training <- dfm(tokens_subset(ft, id_numeric %in% id_train))
+
+# get test set 
+dfmat_test <- dfm(tokens_subset(ft, !id_numeric %in% id_train))
+
+```
+
+
+```{r}
+names(docvars(ft))
+tmod_nb <- textmodel_nb(dfmat_training, docvars(dfmat_training,"sentiment"))
+dfmat_matched <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+
+actual_class <- dfmat_matched$sentiment
+
+predicted_class <- predict(tmod_nb, newdata = dfmat_matched)
+
+tab_class <- table(as.factor(actual_class), as.factor(predicted_class))
+caret::confusionMatrix(tab_class)
+```
+
+
+
+## Latent Semantic Scaling
+
+
+
+
+
+
+```{r}
+t1<-table(data$sent,data$sentiment)
+sum(diag(t1))/sum(t1)
+```
+
+```{r}
+library(LSX)
+```
+
+
+
+
+Dictionary as seed...
+
+```{r}
+data_dictionary_sentiment
+
+```
+
+
+```{r}
+output_lsd <- liwcalike(corp, 
+                       dictionary = data_dictionary_sentiment)
+```
+
+
+```{r}
+data$sent<-output_lsd["positive"]-output_lsd["negative"]
+data$sent_c<-ifelse(data$sent>0,1,0)
+data$sent<-ifelse(data$sent<=0,-1,data$sent_c)
+table(data$sent)
+
+data$sent_c<-ifelse(data$sent_c==1,"pos","neg")
+caret::confusionMatrix(table(data$sent_c,data$sentiment))
+```
+
+
+
+```{r}
+dfmt_sent<-dfm(ft)
+```
+
+
+```{r}
+lss <- textmodel_lss(dfmt_sent, as.seedwords(data_dictionary_sentiment), k = 300, cache = TRUE)
+```
+
+
+
+
+  
+  
+```{r}
+ha<-head(coef(lss), 40) # most positive words
+ta<-tail(coef(lss), 40) # most negative words
+
+```
+  
+  ### Seeded LDA
+
+
+```{r}
+sent<-predict(lss,newdata = dfmt_sent)
+
+table(sent,docvars(dfmt_sent,"sentiment"))
+
+```
+
+
+
+
+```{r}
+docvars(dfmt_sent,"lss")<-ifelse(sent>0,"pos","neg")
+
+```
+
+```{r}
+caret::confusionMatrix(table(docvars(dfmt_sent,"lss"),docvars(dfmt_sent,"sentiment")))
+```
+
+
+
+
+
+
+
+
