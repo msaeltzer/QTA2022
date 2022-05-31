@@ -81,39 +81,37 @@ To give you an idea about how to apply these semisupervised methods, we try it o
 As an example, we will go from dictionaries through mulitlingual learning with simple dictionaries.
 
 
+## 
 
-Import a pretrained data set
+I processed for you a kaggle dataset based on IMDB movie reviews in spanish and english.
+
+
 ```{r}
-data<-read.csv("../data/reviews.csv",encoding="UTF-8")
-
-
-save(data,file="sentiment.rdata")
+data<-read.csv(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_7/Data/multi_rev.csv"),fileEncoding = "UTF-8")
 ```
 
 
-anpassen!
-```{r}
-load(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_4/Data/sentiment.rdata"))
-
-```
+First, we will focus on english data:
 
 ```{r}
-
-corp<-corpus(data$text,docvars 
+data_en<-data[data$lang=="en",]
+corp<-corpus(data_en$text,docvars 
            
-           =data)
+           =data_en)
 ```
 
 
+As a first benchmark, we use the LSD dictionary we used before which has around 10,000 words. 
 
-Basic Classifier as reference
+
+```{r}
+quanteda::data_dictionary_LSD2015
+```
+
+
 
 ```{r}
 lsd<-quanteda::data_dictionary_LSD2015
-length(lsd$negative)
-```
-
-```{r} 
 
 output_lsd <- liwcalike(corp, 
                        dictionary = lsd)
@@ -122,28 +120,27 @@ output_lsd <- liwcalike(corp,
 ```{r}
 table(data$sentiment)
 ```
-
-
+We recode the results and look at the classification accuracy.
 
 ```{r}
-data$sent<-output_lsd["positive"]-output_lsd["negative"]
-data$sent_c<-ifelse(data$sent>0,1,0)
-data$sent<-ifelse(data$sent<=0,-1,data$sent_c)
-table(data$sent)
+data_en$sent<-output_lsd["positive"]-output_lsd["negative"]
+data_en$sent_c<-ifelse(data_en$sent>0,1,0)
+data_en$sent<-ifelse(data_en$sent<=0,-1,data_en$sent_c)
+table(data_en$sent)
 
-data$sent_c<-ifelse(data$sent_c==1,"pos","neg")
+data_en$sent_c<-ifelse(data_en$sent_c==1,"positive","negative")
 
 ```
 ```{r}
-caret::confusionMatrix(table(data$sentiment,data$sent_c))
+caret::confusionMatrix(table(data_en$sentiment,data_en$sent_c))
 ```
 
 
 
 ```{r}
-ft<-tokens(corpus(data$text,docvars=data))
+ft<-tokens(corpus(data_en$text,docvars=data_en))
 
-id_train <- sample(1:nrow(data), round(nrow(data)/4,0), replace = FALSE)
+id_train <- sample(1:nrow(data_en), round(nrow(data_en)/4,0), replace = FALSE)
 # get training set
 docvars(ft,"id_numeric") <- 1:ndoc(ft)
 
@@ -185,7 +182,7 @@ caret::confusionMatrix(tab_class)
 
 
 ```{r}
-t1<-table(data$sent,data$sentiment)
+t1<-table(data_en$sent,data_en$sentiment)
 sum(diag(t1))/sum(t1)
 ```
 
@@ -211,13 +208,13 @@ output_lsd <- liwcalike(corp,
 
 
 ```{r}
-data$sent<-output_lsd["positive"]-output_lsd["negative"]
-data$sent_c<-ifelse(data$sent>0,1,0)
-data$sent<-ifelse(data$sent<=0,-1,data$sent_c)
-table(data$sent)
+data_en$sent<-output_lsd["positive"]-output_lsd["negative"]
+data_en$sent_c<-ifelse(data_en$sent>0,1,0)
+data_en$sent<-ifelse(data_en$sent<=0,-1,data_en$sent_c)
+table(data_en$sent)
 
-data$sent_c<-ifelse(data$sent_c==1,"pos","neg")
-caret::confusionMatrix(table(data$sent_c,data$sentiment))
+data_en$sent_c<-ifelse(data_en$sent_c==1,"positive","negative")
+caret::confusionMatrix(table(data_en$sent_c,data_en$sentiment))
 ```
 
 
@@ -248,7 +245,6 @@ ta<-tail(coef(lss), 40) # most negative words
 ```{r}
 sent<-predict(lss,newdata = dfmt_sent)
 
-table(sent,docvars(dfmt_sent,"sentiment"))
 
 ```
 
@@ -256,7 +252,7 @@ table(sent,docvars(dfmt_sent,"sentiment"))
 
 
 ```{r}
-docvars(dfmt_sent,"lss")<-ifelse(sent>0,"pos","neg")
+docvars(dfmt_sent,"lss")<-ifelse(sent>0,"positive","negative")
 
 ```
 
