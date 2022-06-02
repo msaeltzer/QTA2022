@@ -56,8 +56,6 @@ Today we will start with semisupervised in R and then move to a colab notebook i
 
 
 
-
-
 ## Semisupervised Methods
 
 The common problem of all approaches of unsupervised learning is that you don't know if the extracted concept relates to your research question and the concept you want to operationalize. In the end, it is based on the hope that the dimension you are interested in is also the dimension that is most important in the data. 
@@ -91,6 +89,8 @@ data<-read.csv(url("https://github.com/msaeltzer/QTA2022/raw/main/Session_7/Data
 ```
 
 
+
+
 First, we will focus on english data:
 
 ```{r}
@@ -102,6 +102,11 @@ corp<-corpus(data_en$text,docvars
 
 
 As a first benchmark, we use the LSD dictionary we used before which has around 10,000 words. 
+```{r}
+write.csv(data,file="../data/multi_rev.csv",fileEncoding = "UTF-8")
+m1<-read.csv("../data/multi_rev.csv",encoding = "UTF-8")
+
+```
 
 
 ```{r}
@@ -262,7 +267,9 @@ caret::confusionMatrix(table(docvars(dfmt_sent,"lss"),docvars(dfmt_sent,"sentime
 
 
 
+now, join me at 
 
+https://colab.research.google.com/drive/1bSUgNVcZ1clt-YcV8INSfDY9R53b_smu?usp=sharing
 
 
 
